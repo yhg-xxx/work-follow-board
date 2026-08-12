@@ -1,0 +1,342 @@
+/* ============================================================
+   工作跟进看板 · 设计令牌系统 (Design Tokens)
+   ------------------------------------------------------------
+   架构：原始色阶 (Primitive) → 语义令牌 (Semantic)
+     · 原始色阶：不随主题变化的原料色板（蓝/中性/功能色阶）
+     · 语义令牌：业务真正使用的变量，随主题整体重映射
+   主题：
+     · 浅色（默认，:root）—— 蓝白台账风（侧栏同为柔和浅面）
+     · 深色（[data-theme="dark"]）—— 墨蓝台账风（侧栏为最深一层）
+   Element Plus：浅色由 :root 覆盖；深色叠加官方 dark css-vars + 品牌色覆盖
+   可访问性：正文/标题对比度均满足 WCAG 2.1 AA（≥ 4.5:1）
+   ============================================================ */
+
+:root {
+  /* ============ 原始色阶 · Primitive Palette ============ */
+  /* 蓝（主品牌） */
+  --blue-50:  #EEF3FD;
+  --blue-100: #DCE7FB;
+  --blue-200: #B4C8F2;
+  --blue-300: #87A5E8;
+  --blue-400: #5C82DD;
+  --blue-500: #2456C9;
+  --blue-600: #1E4AA8;
+  --blue-700: #16327E;
+  --blue-800: #0F1B3D;
+  --blue-900: #0A1430;
+
+  /* 中性（墨蓝灰阶） */
+  --gray-50:  #F2F6FD;
+  --gray-100: #F4F7FC;
+  --gray-200: #DFE8F8;
+  --gray-300: #C7D5F0;
+  --gray-400: #93A3C4;
+  --gray-500: #5C6B8C;
+  --gray-600: #33415F;
+  --gray-700: #16223E;
+
+  /* 功能色（色相固定） */
+  --red-500:    #D64550;
+  --green-500:  #2E9E6B;
+  --amber-500:  #E8A33D;
+  --slate-500:  #94A3B8;
+
+  /* 看板身份色 */
+  --quanfa-500: #2B59C3;
+  --happy-500:  #E8862C;
+  --violet-500: #8B5CF6;
+
+  /* 字体（主题无关） */
+  --font-sans: 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'SFMono-Regular', Consolas, 'JetBrains Mono', Menlo, monospace;
+
+  /* 形状（主题无关） */
+  --radius-card: 10px;
+  --radius-ctl: 6px;
+
+  /* ============ 语义令牌 · 浅色主题（默认） ============ */
+  /* 表面 / 文字 / 线条 */
+  --c-bg:          var(--gray-50);     /* 应用底色：雾蓝纸白 */
+  --c-card:        #FFFFFF;            /* 卡片 / 数据区 */
+  --c-line:        var(--gray-200);
+  --c-line-strong: var(--gray-300);
+  --c-ink:         var(--gray-700);    /* 主文字：墨蓝 */
+  --c-ink-soft:    var(--gray-600);
+  --c-muted:       var(--gray-500);
+  --c-faint:       var(--gray-400);
+
+  /* 主题蓝与渐变 */
+  --c-blue:       var(--blue-500);
+  --c-blue-deep:  var(--blue-600);
+  --c-blue-ink:   var(--blue-700);
+  --c-blue-soft:  var(--blue-50);
+  --c-grad-header: linear-gradient(96deg, #16327E 0%, #2456C9 55%, #2E63E6 100%);
+  --c-grad-th:     linear-gradient(180deg, #3B66DB 0%, #2B55C4 100%);
+
+  /* 看板身份色 */
+  --c-quanfa: var(--quanfa-500);
+  --c-happy:  var(--happy-500);
+  --c-temp:   var(--violet-500);
+
+  /* 侧栏导航（浅色主题：柔和浅面，与主体一致） */
+  --c-sidebar-bg:         #FFFFFF;
+  --c-sidebar-bg-deep:    #EEF3FD;
+  --c-sidebar-ink:        var(--c-ink-soft);
+  --c-sidebar-muted:      var(--c-muted);
+  --c-sidebar-on-ink:     var(--c-blue);
+  --c-sidebar-hover:      rgba(36, 86, 201, 0.06);
+  --c-sidebar-active-bg:  var(--c-blue-soft);
+  --c-sidebar-active-bar: var(--c-blue);
+  --c-sidebar-accent:     var(--c-blue);
+  --c-sidebar-border:     rgba(22, 34, 62, 0.08);
+  --c-sidebar-count-bg:   rgba(22, 34, 62, 0.06);
+  --c-sidebar-count-on-bg: var(--c-blue-soft);
+  --c-sidebar-sub-on-bg:  rgba(36, 86, 201, 0.06);
+  --c-sidebar-foot-bg:    rgba(36, 86, 201, 0.03);
+  --c-scrollbar-sb:       rgba(36, 86, 201, 0.22);
+  --c-scrollbar-sb-hover: rgba(36, 86, 201, 0.38);
+
+  /* 状态语义色 */
+  --c-st-ongoing: var(--blue-500);
+  --c-st-urgent:  var(--red-500);
+  --c-st-done:    var(--green-500);
+  --c-st-follow:  var(--amber-500);
+  --c-st-idle:    var(--slate-500);
+
+  /* 优先级（复用状态色相） */
+  --c-pri-high: var(--red-500);
+  --c-pri-mid:  var(--amber-500);
+  --c-pri-low:  var(--slate-500);
+
+  /* 数据表格表面（斑马行 / 悬停 / 边框 / 编码底） */
+  --c-table-border:  #D8E2F5;
+  --c-th-border:     #23479F;
+  --c-row-zebra:     #F5F9FF;
+  --c-row-hover:     #EAF1FE;
+  --c-code-bg:       #EEF3FC;
+
+  /* 软底色（徽章 / 标签底纹，低饱和铺底） */
+  --c-quanfa-soft: rgba(43, 89, 195, 0.10);
+  --c-happy-soft:  rgba(232, 134, 44, 0.12);
+  --c-temp-soft:   rgba(139, 92, 246, 0.12);
+  --c-st-urgent-soft: rgba(214, 69, 80, 0.10);
+  --c-st-done-soft:   rgba(46, 158, 107, 0.10);
+  --c-st-follow-soft: rgba(232, 163, 61, 0.12);
+  --c-st-idle-soft:   rgba(148, 163, 184, 0.14);
+
+  /* 身份印章（新建/编辑弹窗 ID 印章） */
+  --c-quanfa-stamp-bg:     #EEF4FE;
+  --c-quanfa-stamp-border: #A9C1EF;
+  --c-happy-stamp-bg:      #FDF4EA;
+  --c-happy-stamp-border:  #F2C48F;
+
+  /* 看板选择卡选中态底色 */
+  --c-quanfa-pick-bg: #EDF3FE;
+  --c-happy-pick-bg:  #FDF1E3;
+
+  /* 空态遮罩 / 关键词高亮 */
+  --c-empty-veil: rgba(255, 255, 255, 0.72);
+  --c-hl-bg:      #FFE9A8;
+  --c-hl-ink:     #8A5A00;
+
+  /* 阴影 */
+  --shadow-card:       0 1px 2px rgba(30, 60, 130, 0.06);
+  --shadow-card-hover: 0 4px 14px rgba(30, 60, 130, 0.10);
+
+  /* ============ Element Plus 主题桥接（浅色） ============ */
+  --el-color-primary:          var(--blue-500);
+  --el-color-primary-light-3:  var(--blue-400);
+  --el-color-primary-light-5:  var(--blue-300);
+  --el-color-primary-light-7:  var(--blue-200);
+  --el-color-primary-light-8:  #CEDCF7;
+  --el-color-primary-light-9:  var(--blue-50);
+  --el-color-primary-dark-2:   #1D45A1;
+  --el-color-success: var(--green-500);
+  --el-color-warning: var(--amber-500);
+  --el-color-danger:  var(--red-500);
+  --el-color-info:    var(--slate-500);
+  --el-border-radius-base:    6px;
+  --el-text-color-primary:     var(--c-ink);
+  --el-text-color-regular:     var(--c-ink-soft);
+  --el-text-color-secondary:   var(--c-muted);
+  --el-text-color-placeholder: var(--c-faint);
+  --el-border-color:        var(--c-line);
+  --el-border-color-light:  #E9F0FC;
+  --el-border-color-lighter:#F0F4FC;
+  --el-fill-color-blank:    var(--c-card);
+  --el-bg-color:            var(--c-card);
+  --el-bg-color-page:       var(--c-bg);
+  --el-font-family:         var(--font-sans);
+}
+
+/* ============================================================
+   深色主题 · [data-theme="dark"]
+   设计意图：同色系「墨蓝台账」——保留蓝白台账的秩序感，
+   背景转为深蓝夜色，内容卡片为抬升的深靛面，侧栏仍是最深一层。
+   层级：侧栏(#060A16) < 应用底(#0D1426) < 卡片(#172139)
+   ============================================================ */
+[data-theme="dark"] {
+  /* 表面 / 文字 / 线条 */
+  --c-bg:          #0D1426;   /* 深靛夜色底 */
+  --c-card:        #172139;   /* 抬升的卡片面 */
+  --c-line:        #2A3654;
+  --c-line-strong: #3D4D70;
+  --c-ink:         #E8EEFA;   /* 高对比柔白正文（对比度 ≥ 12:1） */
+  --c-ink-soft:    #B8C5E0;
+  --c-muted:       #8295BC;
+  --c-faint:       #5A6B92;
+
+  /* 主题蓝与渐变（提亮以保证暗底对比度） */
+  --c-blue:       #5B8AE6;
+  --c-blue-deep:  #4A78D4;
+  --c-blue-ink:   #A9C4FF;
+  --c-blue-soft:  #1B2848;
+  --c-grad-header: linear-gradient(96deg, #13234A 0%, #2456C9 58%, #3D72E6 100%);
+  --c-grad-th:     linear-gradient(180deg, #2C4FA8 0%, #1E3D80 100%);
+
+  /* 看板身份色（暗底下提亮、去浊） */
+  --c-quanfa: #7BA0EC;
+  --c-happy:  #F0A45C;
+  --c-temp:   #B59CFF;
+
+  /* 侧栏：仍是最深一层（比应用底更深，让内容卡片「浮起」） */
+  --c-sidebar-bg:         #060A16;
+  --c-sidebar-bg-deep:    #03060F;
+  --c-sidebar-ink:        #C5D0EC;
+  --c-sidebar-muted:      #7A8BB2;
+  --c-sidebar-on-ink:     #ffffff;
+  --c-sidebar-hover:      rgba(255, 255, 255, 0.05);
+  --c-sidebar-active-bg:  rgba(91, 138, 230, 0.20);
+  --c-sidebar-active-bar: #5B8AE6;
+  --c-sidebar-accent:     #A9C4FF;
+  --c-sidebar-border:     rgba(255, 255, 255, 0.08);
+  --c-sidebar-count-bg:   rgba(255, 255, 255, 0.08);
+  --c-sidebar-count-on-bg: rgba(255, 255, 255, 0.18);
+  --c-sidebar-sub-on-bg:  rgba(255, 255, 255, 0.06);
+  --c-sidebar-foot-bg:    rgba(0, 0, 0, 0.14);
+  --c-scrollbar-sb:       rgba(169, 196, 255, 0.2);
+  --c-scrollbar-sb-hover: rgba(169, 196, 255, 0.35);
+
+  /* 状态语义色（提亮以保证暗底可读） */
+  --c-st-ongoing: #5B8AE6;
+  --c-st-urgent:  #F06872;
+  --c-st-done:    #3FB686;
+  --c-st-follow:  #F0B45A;
+  --c-st-idle:    #7E8DAA;
+
+  --c-pri-high: #F06872;
+  --c-pri-mid:  #F0B45A;
+  --c-pri-low:  #7E8DAA;
+
+  /* 数据表格表面 */
+  --c-table-border:  #2A3654;
+  --c-th-border:     #1E3D80;
+  --c-row-zebra:     #16213A;
+  --c-row-hover:     #1E2B48;
+  --c-code-bg:       #1E2B48;
+
+  /* 软底色（暗底下加深为半透明色块，避免发灰） */
+  --c-quanfa-soft: rgba(123, 160, 236, 0.16);
+  --c-happy-soft:  rgba(240, 164, 92, 0.18);
+  --c-temp-soft:   rgba(181, 156, 255, 0.18);
+  --c-st-urgent-soft: rgba(240, 104, 114, 0.16);
+  --c-st-done-soft:   rgba(63, 182, 134, 0.16);
+  --c-st-follow-soft: rgba(240, 180, 90, 0.18);
+  --c-st-idle-soft:   rgba(126, 141, 170, 0.18);
+
+  /* 身份印章 */
+  --c-quanfa-stamp-bg:     #1A2747;
+  --c-quanfa-stamp-border: #3A5288;
+  --c-happy-stamp-bg:      #2F2410;
+  --c-happy-stamp-border:  #7A5328;
+
+  /* 看板选择卡选中态 */
+  --c-quanfa-pick-bg: #1A2747;
+  --c-happy-pick-bg:  #2F2410;
+
+  /* 空态遮罩 / 关键词高亮 */
+  --c-empty-veil: rgba(13, 20, 38, 0.72);
+  --c-hl-bg:      rgba(240, 180, 90, 0.32);
+  --c-hl-ink:     #F5D088;
+
+  /* 阴影（暗色下更深、更散） */
+  --shadow-card:       0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-card-hover: 0 6px 18px rgba(0, 0, 0, 0.45);
+
+  /* ============ Element Plus 主题桥接（深色） ============
+     叠加官方 dark/css-vars.css（在 main.ts 引入），此处覆盖品牌色与文字，
+     保证与语义令牌一致。 */
+  --el-color-primary:          #5B8AE6;
+  --el-color-primary-light-3:  #4A78D4;
+  --el-color-primary-light-5:  #3D68C8;
+  --el-color-primary-light-7:  #2F54AC;
+  --el-color-primary-light-8:  #24468C;
+  --el-color-primary-light-9:  #1B2F5C;
+  --el-color-primary-dark-2:   #7BA0EC;
+  --el-color-success: #3FB686;
+  --el-color-warning: #F0B45A;
+  --el-color-danger:  #F06872;
+  --el-color-info:    #7E8DAA;
+  --el-text-color-primary:     var(--c-ink);
+  --el-text-color-regular:     var(--c-ink-soft);
+  --el-text-color-secondary:   var(--c-muted);
+  --el-text-color-placeholder: var(--c-faint);
+  --el-border-color:        var(--c-line);
+  --el-border-color-light:  #232F4A;
+  --el-border-color-lighter:#1E2840;
+  --el-fill-color-blank:    var(--c-card);
+  --el-bg-color:            var(--c-card);
+  --el-bg-color-page:       var(--c-bg);
+  --el-bg-color-overlay:    #1B2742;
+  --el-fill-color:          #1E2B48;
+  --el-fill-color-light:    #1A2640;
+  --el-fill-color-lighter:  #16213A;
+  --el-fill-color-blank:    var(--c-card);
+  --el-mask-color:          rgba(6, 10, 22, 0.7);
+}
+
+/* ============================================================
+   基础重置 / 排版
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans), serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--c-ink);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* 等宽数字：ID / 日期 / 统计 */
+.num {
+  font-family: var(--font-mono), serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* 搜索关键词高亮（全局：由 v-html 注入的 <mark> 无 scoped 属性，需全局样式） */
+mark.hl {
+  background: var(--c-hl-bg);
+  color: var(--c-hl-ink);
+  border-radius: 3px;
+  padding: 0 2px;
+}

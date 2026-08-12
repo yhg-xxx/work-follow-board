@@ -1,0 +1,146 @@
+@import './base.css';
+
+#app {
+  min-height: 100vh;
+}
+
+/* ---------- 主题切换过渡 ----------
+   方案一（现代浏览器）：View Transitions API —— 由 useTheme 在切换时
+     document.startViewTransition() 触发，对整页做新旧快照交叉淡入，
+     可丝滑过渡 linear-gradient（页头/侧栏渐变）等无法插值的属性。
+   方案二（降级）：.theme-anim 由 useTheme 临时挂到 <html>，
+     仅对颜色相关属性做过渡，结束后移除，避免常驻开销。
+   两者都尊重 prefers-reduced-motion：直接跳变。 */
+
+/* View Transitions：调优交叉淡入的节奏 */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+::view-transition-old(root) {
+  /* 旧快照稍快淡出，让新主题更早「落地」，减少发糊感 */
+  animation-duration: 320ms;
+}
+
+.theme-anim,
+.theme-anim *,
+.theme-anim *::before,
+.theme-anim *::after {
+  transition:
+    background-color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    background-image 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    color 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    fill 0.42s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.42s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .theme-anim,
+  .theme-anim *,
+  .theme-anim *::before,
+  .theme-anim *::after {
+    transition: none !important;
+  }
+}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb, #CBD4E3);
+  border-radius: 5px;
+  border: 2px solid var(--c-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover, #A9B6CC);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+/* 深色主题滚动条 */
+[data-theme='dark'] {
+  --scroll-thumb: #2F3E60;
+  --scroll-thumb-hover: #3D4D70;
+}
+
+/* ---------- Element Plus 全局细节 ---------- */
+.el-dialog {
+  --el-dialog-bg-color: var(--c-card);
+  --el-dialog-title-font-size: 17px;
+  border-radius: 12px;
+  background: var(--c-card);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.28);
+}
+.el-dialog__header {
+  padding: 18px 22px 0;
+}
+.el-dialog__body {
+  padding: 18px 22px;
+}
+.el-dialog__footer {
+  padding: 0 22px 18px;
+}
+.el-dialog__title {
+  font-weight: 600;
+  color: var(--c-ink);
+}
+.el-overlay-dialog {
+  background: var(--el-mask-color);
+}
+.el-dropdown-menu {
+  background: var(--c-card);
+  border-color: var(--c-line);
+}
+.el-dropdown-menu__item {
+  font-size: 13px;
+}
+.el-dropdown-menu__item:not(.is-disabled):hover {
+  background: var(--c-row-hover);
+  color: var(--c-blue);
+}
+.el-message {
+  border-radius: 8px;
+}
+.el-popper.is-light {
+  background: var(--c-card);
+  border-color: var(--c-line);
+  color: var(--c-ink);
+}
+.el-popper.is-light .el-popper__arrow::before {
+  background: var(--c-card);
+  border-color: var(--c-line);
+}
+.el-table {
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--c-muted);
+  --el-table-row-hover-bg-color: var(--c-row-hover);
+  --el-table-border-color: var(--c-table-border);
+  --el-table-text-color: var(--c-ink-soft);
+  color: var(--c-ink-soft);
+}
+.el-table tr,
+.el-table__row:hover td.el-table__cell {
+  background-color: var(--c-card);
+}
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select .el-input__wrapper,
+.el-date-editor.el-input__wrapper {
+  background-color: var(--c-blue-soft);
+  box-shadow: 0 0 0 1px var(--c-line) inset;
+}
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--c-blue) inset;
+}
+.el-input__inner,
+.el-textarea__inner {
+  color: var(--c-ink);
+}
+.el-input__inner::placeholder,
+.el-textarea__inner::placeholder {
+  color: var(--c-faint);
+}
