@@ -1,0 +1,32 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: backend
+  config:
+    import: optional:classpath:application-local.yaml
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:3306/tmo_task?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+# 企业微信应用配置（真实密钥在 application-local.yaml，不随仓库提交）
+wecom:
+  enabled: true
+  corp-id: ""
+  provider-corp-id: ""
+  suite-id: ""
+  suite-secret: ""
+  secret: ""
+  agent-id: ""
+  token: ""
+  aes-key: ""
