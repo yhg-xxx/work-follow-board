@@ -715,7 +715,7 @@ function exportCSV() {
     return
   }
   const headers = MAIN_COLUMNS.map((c) => c.label)
-  const esc = (v: unknown) => `\"${String(v ?? '').replace(/"/g, '""')}\"`
+  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
   const lines = [
     headers.join(','),
     ...rows.map((t) =>

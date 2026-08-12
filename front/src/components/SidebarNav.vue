@@ -80,7 +80,7 @@ const emit = defineEmits<{
           >
             <span class="sb-icon" :style="{ background: g.accent }">
               <svg v-if="g.id === 'quanfa'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
-              <svg v-else-if="g.id === 'happy'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11s3.5-6 9-6 9 6 9 6v5a2 2 0 0 1-2 2h-2v-6h-2v6h-2v-6h-2v6h-2v-6h-2v6H7v-6H5v6H3v-5z"/></svg>
+              <svg v-else-if="g.id === 'happy'" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11s3.5-6 9-6 9 6 9 6v5a2 2 0 0 1-2 2h-2v-6h-2v6h-2v-6h-2v6h-2v-6H7v-6H5v6H3v-5z"/></svg>
               <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.4 5.6L20 8.5l-4.2 3.9L16.8 18 12 15.5 7.2 18l1-5.6L4 8.5l5.6-.9L12 2z"/></svg>
             </span>
             <span class="sb-label">{{ g.label }}</span>
