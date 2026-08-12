@@ -1,0 +1,26 @@
+# --- 构建产物 ---
+backend/target/
+backend/src/main/resources/static/
+front/dist/
+front/node_modules/
+
+# --- IDE / 本地工具 ---
+.idea/
+*.iml
+.vscode/
+*.tsbuildinfo
+
+# --- 本地敏感配置（企微密钥，不随仓库提交）---
+backend/src/main/resources/application-local.yaml
+
+# --- 真实业务数据（隐私，不进公开仓库）---
+工作跟进看板_*.json
+backend/src/main/resources/sql/data_*.sql
+
+# --- 内部文档 / 第三方参考源码 ---
+.trae/
+weworkapi_java-master/
+
+# --- 日志 ---
+*.log
+logs/
