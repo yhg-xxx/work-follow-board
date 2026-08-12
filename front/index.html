@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>工作跟进看板</title>
+    <!--
+      主题无闪烁（FOUC 防护）：
+      在首帧渲染前根据 localStorage 或系统偏好给 <html> 落 data-theme 与 .dark，
+      与 useTheme.ts 的逻辑保持一致（key: tmo-theme）。
+    -->
+    <script>
+      (function () {
+        try {
+          var k = 'tmo-theme'
+          var s = localStorage.getItem(k)
+          var t =
+            s === 'light' || s === 'dark'
+              ? s
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light'
+          var r = document.documentElement
+          r.setAttribute('data-theme', t)
+          r.style.colorScheme = t
+          if (t === 'dark') r.classList.add('dark')
+        } catch (e) {
+          /* 忽略，降级为默认浅色 */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
