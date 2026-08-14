@@ -111,11 +111,17 @@ async function save() {
     ElMessage.warning('请填写事项标题')
     return
   }
+  // 工作模块必填：模块决定事项 ID 的字母段，留空会按新模块顺延分配字母，导致编号不延续
+  if (!form.module?.trim()) {
+    ElMessage.warning('请填写工作模块')
+    return
+  }
   saving.value = true
   try {
     const payload: TaskRequest = {
       ...form,
       title: form.title.trim(),
+      module: form.module.trim(),
       subItems: (form.subItems ?? []).map((s) => s.trim()).filter(Boolean),
     }
     if (editingId.value) {
@@ -189,7 +195,7 @@ async function save() {
               </button>
             </div>
           </el-form-item>
-          <el-form-item label="工作模块" class="fg-1">
+          <el-form-item label="工作模块" class="fg-1" required>
             <el-autocomplete
               v-model="form.module"
               :fetch-suggestions="queryModuleSearch"

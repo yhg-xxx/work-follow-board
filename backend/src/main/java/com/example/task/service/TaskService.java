@@ -222,6 +222,9 @@ public class TaskService {
         if (req.title() == null || req.title().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
         }
+        if (req.module() == null || req.module().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "工作模块不能为空");
+        }
         if (req.taskCode() != null && !req.taskCode().isBlank()
                 && taskRepository.findByTaskCode(req.taskCode().trim()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "事项ID已存在: " + req.taskCode());
