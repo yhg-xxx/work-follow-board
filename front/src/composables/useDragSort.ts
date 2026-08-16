@@ -11,8 +11,10 @@ export function useDragSort(params: {
   tasks: ComputedRef<TaskListItem[]>
   isManualSort: ComputedRef<boolean>
   fetchFiltered: () => Promise<void>
+  /** 乐观更新：把拖拽后的新顺序写回本地列表（不触发 loading / 不重拉） */
+  applyOrder: (list: TaskListItem[]) => void
 }) {
-  const { tasks, isManualSort, fetchFiltered } = params
+  const { tasks, isManualSort, fetchFiltered, applyOrder } = params
 
   const cardsGridEl = ref<HTMLElement | null>(null)
   let sortable: Sortable | null = null
@@ -38,7 +40,11 @@ export function useDragSort(params: {
   }, { immediate: true })
   onBeforeUnmount(teardownSortable)
 
-  /** 拖拽结束：在 tasks.value 全序数组中按可见区移动计算新顺序 → 持久化（只提交被移动的块 + 两端锚点） → 重新拉取 */
+  /**
+   * 拖拽结束：在 tasks.value 全序数组中按可见区移动计算新顺序 → 先乐观更新本地列表（Sortable 已把 DOM 挪好，
+   * 同步写回数据源，避免 Vue keyed 重渲染把卡片弹回原位） → 后台持久化（只提交被移动的块 + 两端锚点）。
+   * 成功无需重拉（避免 loading 转圈 / 列表跳回第一页）；失败才以服务端为准重拉回滚。
+   */
   function handleDragEnd(evt: Sortable.SortableEvent) {
     const oldIndex = evt.oldIndex
     const newIndex = evt.newIndex
@@ -47,6 +53,7 @@ export function useDragSort(params: {
     if (oldIndex < 0 || oldIndex >= arr.length || newIndex < 0 || newIndex > arr.length) return
     const [moved] = arr.splice(oldIndex, 1)
     arr.splice(newIndex, 0, moved!)
+    applyOrder(arr)
     // 最小变化区间：仅提交被移动的连续块（含跨越的相邻项）与目标位置两端锚点，
     // 避免把当前筛选结果的全部 id 一次性发给后端
     const lo = Math.min(oldIndex, newIndex)
@@ -56,12 +63,10 @@ export function useDragSort(params: {
       ids: block.map((t) => t.id),
       afterId: arr[lo - 1]?.id ?? null,
       beforeId: arr[hi + 1]?.id ?? null,
+    }).catch((err) => {
+      ElMessage.error('排序保存失败：' + errMsg(err))
+      fetchFiltered()
     })
-      .then(() => fetchFiltered())
-      .catch((err) => {
-        ElMessage.error('排序保存失败：' + errMsg(err))
-        fetchFiltered()
-      })
   }
 
   return { cardsGridEl, handleDragEnd }

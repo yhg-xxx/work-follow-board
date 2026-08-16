@@ -35,6 +35,11 @@ public class OpLogService {
         if (req == null || req.action() == null || req.action().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "action 必填");
         }
+        // 与 t_op_log 列长度一致，超长直接 400 而非数据库 500
+        checkLen(req.action(), 32, "action");
+        checkLen(req.targetType(), 16, "targetType");
+        checkLen(req.targetCode(), 32, "targetCode");
+        checkLen(req.detail(), 512, "detail");
         OpLog log = new OpLog();
         log.setAction(req.action().trim());
         log.setTargetType(req.targetType());
@@ -43,6 +48,13 @@ public class OpLogService {
         log.setDetail(req.detail());
         log.setCreatedAt(LocalDateTime.now());
         return toItem(opLogRepository.save(log));
+    }
+
+    private void checkLen(String s, int max, String field) {
+        if (s != null && s.length() > max) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    field + "过长（最多 " + max + " 字）");
+        }
     }
 
     /**

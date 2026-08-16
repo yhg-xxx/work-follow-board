@@ -2,9 +2,11 @@
 // 筛选/排序变化自动重置并重拉第一页；统计条带聚合与列表同套筛选条件
 import { computed, ref, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { listTasks, taskStats } from '../api/task'
 import type { TaskListItem, TaskStats } from '../api/task'
 import type { Filters, MenuGroup, SortField, SortOrder } from '../utils/taskShared'
+import { errMsg } from '../utils/taskShared'
 import type { NavState } from './useMenuStats'
 
 /** 单页条数（服务端分页，滚动到底加载下一页） */
@@ -119,6 +121,10 @@ export function useTaskData(params: {
       loadedAll.value = !pageRes.data.hasMore
       stats.value = statsRes.data
       resetTick.value++
+    } catch (err: any) {
+      if (seq !== fetchSeq) return
+      // 请求失败：保留旧列表与统计，仅提示；loading 由 finally 复位
+      ElMessage.error('加载事项失败：' + errMsg(err))
     } finally {
       // 只有最新一次请求完成才结束 loading（旧请求提前返回时仍需等待新请求）
       if (seq === fetchSeq) {
@@ -142,6 +148,9 @@ export function useTaskData(params: {
       filteredTasks.value = [...filteredTasks.value, ...add]
       nextCursor = res.data.nextCursor
       loadedAll.value = !res.data.hasMore
+    } catch (err: any) {
+      if (seq !== fetchSeq) return
+      ElMessage.error('加载更多失败：' + errMsg(err))
     } finally {
       if (seq === fetchSeq) {
         loading.value = false

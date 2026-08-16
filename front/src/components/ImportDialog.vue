@@ -47,6 +47,9 @@ const importSkipOnError = ref(true)
 const importAutoBackup = ref(true)
 // 前端预校验结果
 const importPreErrors = ref<ImportBatchError[]>([])
+// xlsx/csv 原始行缓存：列映射变化时重算 parsed/preview 用（非响应式，普通变量即可，
+// 不挂在 ref 对象上避免 as any 的脆弱 hack）
+let rawRowsCache: Record<string, unknown>[] | undefined
 
 /** 导入字段选项（列映射下拉使用） */
 const IMPORT_FIELD_OPTIONS = [
@@ -268,7 +271,7 @@ async function onImportFile(e: Event) {
         parsed = reParsed
         importPreErrors.value = errsList
         // 存 rawRows 给重算映射用
-        ;(importParsedItems as any)._rawRows = rawRows
+        rawRowsCache = rawRows
       } else {
         // exceljs 体积较大，仅解析 xlsx 时懒加载
         const ExcelJS = await import('exceljs')
@@ -323,7 +326,7 @@ async function onImportFile(e: Event) {
         parsed = reParsed
         importPreErrors.value = errsList
         // 存 rawRows 给重算映射用
-        ;(importParsedItems as any)._rawRows = rawRows
+        rawRowsCache = rawRows
       }
     } else {
       ElMessage.error(`不支持的文件类型：.${ext}，请选择 .json / .xlsx / .csv 文件`)
@@ -348,7 +351,7 @@ async function onImportFile(e: Event) {
 
 /** 重算 xlsx/csv 的 parsed 和 preview（列映射变化时调用） */
 function recomputeFromMapping() {
-  const rawRows = (importParsedItems as any)._rawRows as Record<string, unknown>[] | undefined
+  const rawRows = rawRowsCache
   if (!rawRows || importFileType.value === 'json') return
   const reParsed: TaskBatchItem[] = []
   const errsList: ImportBatchError[] = []

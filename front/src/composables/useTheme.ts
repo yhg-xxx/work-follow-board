@@ -89,7 +89,12 @@ applyTheme(theme.value)
 if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
   const mql = window.matchMedia('(prefers-color-scheme: dark)')
   mql.addEventListener?.('change', (e) => {
-    if (!localStorage.getItem(STORAGE_KEY)) {
+    // 存储不可用时同样降级跟随系统（与 resolveInitial 的兜底一致）
+    try {
+      if (!localStorage.getItem(STORAGE_KEY)) {
+        theme.value = e.matches ? 'dark' : 'light'
+      }
+    } catch {
       theme.value = e.matches ? 'dark' : 'light'
     }
   })

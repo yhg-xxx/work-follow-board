@@ -160,39 +160,50 @@ export function useTaskExport(params: {
       ElMessage.warning('没有可导出的数据')
       return
     }
-    const headers = MAIN_COLUMNS.map((c) => c.label)
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
-    const lines = [
-      headers.join(','),
-      ...rows.map((t) =>
-        MAIN_COLUMNS.map((c) => {
-          let v: unknown
-          switch (c.key) {
-            case 'taskCode': v = t.taskCode ?? ''; break
-            case 'board': v = boardLabel(t.board, boardMap.value); break
-            case 'module': v = t.module ?? ''; break
-            case 'title': v = t.title; break
-            case 'description': v = t.description ?? ''; break
-            case 'status': v = t.status; break
-            case 'priority': v = t.priority; break
-            case 'owner': v = t.owner ?? ''; break
-            case 'collab': v = t.collab ?? ''; break
-            case 'pain': v = t.pain ?? ''; break
-            case 'nextStep': v = t.nextStep ?? ''; break
-            case 'deadline': v = t.deadline ? fmtISODate(t.deadline) : ''; break
-            case 'risk': v = t.risk ?? ''; break
-            case 'subItemsText': v = (t.subItems ?? []).join('；'); break
-            case 'updateDate': v = t.updateDate ? fmtISODate(t.updateDate) : ''; break
-            default: v = ''
-          }
-          return esc(v)
-        }).join(','),
-      ),
-    ]
-    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
-    downloadBlob(blob, `工作跟进看板_${dateTag()}.csv`)
-    ElMessage.success(`已导出 CSV，共 ${rows.length} 条`)
-    logOp({ action: 'EXPORT', detail: `导出 CSV，共 ${rows.length} 条` })
+    exporting.value = true
+    try {
+      const headers = MAIN_COLUMNS.map((c) => c.label)
+      // 单元格转义：双引号翻倍；对 = + - @ / 制表符 开头加前导单引号，
+      // 防止 Excel 打开 CSV 时把用户录入内容当作公式执行（CWE-1236 公式注入）
+      const esc = (v: unknown) => {
+        const s = String(v ?? '')
+        const guarded = /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
+        return `"${guarded.replace(/"/g, '""')}"`
+      }
+      const lines = [
+        headers.join(','),
+        ...rows.map((t) =>
+          MAIN_COLUMNS.map((c) => {
+            let v: unknown
+            switch (c.key) {
+              case 'taskCode': v = t.taskCode ?? ''; break
+              case 'board': v = boardLabel(t.board, boardMap.value); break
+              case 'module': v = t.module ?? ''; break
+              case 'title': v = t.title; break
+              case 'description': v = t.description ?? ''; break
+              case 'status': v = t.status; break
+              case 'priority': v = t.priority; break
+              case 'owner': v = t.owner ?? ''; break
+              case 'collab': v = t.collab ?? ''; break
+              case 'pain': v = t.pain ?? ''; break
+              case 'nextStep': v = t.nextStep ?? ''; break
+              case 'deadline': v = t.deadline ? fmtISODate(t.deadline) : ''; break
+              case 'risk': v = t.risk ?? ''; break
+              case 'subItemsText': v = (t.subItems ?? []).join('；'); break
+              case 'updateDate': v = t.updateDate ? fmtISODate(t.updateDate) : ''; break
+              default: v = ''
+            }
+            return esc(v)
+          }).join(','),
+        ),
+      ]
+      const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+      downloadBlob(blob, `工作跟进看板_${dateTag()}.csv`)
+      ElMessage.success(`已导出 CSV，共 ${rows.length} 条`)
+      logOp({ action: 'EXPORT', detail: `导出 CSV，共 ${rows.length} 条` })
+    } finally {
+      exporting.value = false
+    }
   }
 
   // 备份 JSON（全库，格式对称于 {data:{quanfa[],happy[]}}，可直接回导）

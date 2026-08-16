@@ -349,12 +349,7 @@ public class TaskService {
 
     @Transactional
     public TaskDtos.TaskDetail create(TaskDtos.TaskRequest req) {
-        if (req.title() == null || req.title().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
-        }
-        if (req.module() == null || req.module().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "工作模块不能为空");
-        }
+        validateTaskRequest(req);
         if (req.taskCode() != null && !req.taskCode().isBlank()
                 && taskRepository.findByTaskCode(req.taskCode().trim()).isPresent()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "事项ID已存在: " + req.taskCode());
@@ -370,6 +365,7 @@ public class TaskService {
 
     @Transactional
     public TaskDtos.TaskDetail update(Long id, TaskDtos.TaskRequest req) {
+        validateTaskRequest(req);
         Task task = requireTask(id);
         String oldOwnerUserid = task.getOwnerUserid();
         applyRequest(task, req);
@@ -380,6 +376,36 @@ public class TaskService {
             weComApiClient.sendTaskNotify(task, "assign");
         }
         return toDetail(task);
+    }
+
+    /**
+     * 创建/更新事项的边界校验（与导入/状态流转的校验口径一致）：
+     * 标题/模块必填、看板必须存在于 t_board、状态/优先级非空时必须是合法枚举。
+     */
+    private void validateTaskRequest(TaskDtos.TaskRequest req) {
+        if (req == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请求体不能为空");
+        }
+        if (req.title() == null || req.title().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "标题不能为空");
+        }
+        if (req.module() == null || req.module().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "工作模块不能为空");
+        }
+        if (req.board() == null || req.board().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "看板不能为空");
+        }
+        if (boardRepository.findByCode(req.board().trim()).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "看板不存在: " + req.board());
+        }
+        if (req.status() != null && !req.status().isBlank() && !STATUSES.contains(req.status().trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "非法状态: " + req.status() + "，可选: " + STATUSES);
+        }
+        if (req.priority() != null && !req.priority().isBlank() && !PRIORITIES.contains(req.priority().trim())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "非法优先级: " + req.priority() + "，可选: " + PRIORITIES);
+        }
     }
 
     @Transactional
@@ -510,9 +536,18 @@ public class TaskService {
         }
 
         List<TaskDtos.TaskBatchItem> items = req.items();
+        // upsert 模式按 taskCode 匹配：同一批次内重复的 code 会互相覆盖且计数失真，需去重
+        Set<String> seenCodes = "upsert".equals(mode) ? new HashSet<>() : null;
         for (int i = 0; i < items.size(); i++) {
             TaskDtos.TaskBatchItem it = items.get(i);
             List<TaskDtos.ImportBatchError> rowErrs = validateBatchItem(it, i, validBoards);
+            if (seenCodes != null && it != null) {
+                String code = trimToNull(it.taskCode());
+                if (code != null && !seenCodes.add(code)) {
+                    rowErrs.add(new TaskDtos.ImportBatchError(i, "事项ID",
+                            "批次内存在重复的事项ID: " + code, code));
+                }
+            }
             if (!rowErrs.isEmpty()) {
                 if (skipOnError) {
                     errors.addAll(rowErrs);
@@ -675,6 +710,10 @@ public class TaskService {
         if (req == null || req.summary() == null || req.summary().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "跟进摘要不能为空");
         }
+        // 与 t_task_log 列长度一致，超长直接 400 而非数据库 500
+        checkLen(req.summary(), 512, "跟进摘要");
+        checkLen(req.person(), 64, "跟进人");
+        checkLen(req.nextStep(), 512, "下一步");
         TaskLog log = new TaskLog();
         log.setTask(task);
         log.setLogDate(req.logDate() != null ? req.logDate() : LocalDate.now());
@@ -685,6 +724,13 @@ public class TaskService {
         task.setUpdateDate(LocalDate.now());
         taskRepository.save(task);
         return toDetail(task);
+    }
+
+    private void checkLen(String s, int max, String field) {
+        if (s != null && s.length() > max) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    field + "过长（最多 " + max + " 字）");
+        }
     }
 
     /** 删除单条跟进记录（仅允许删除属于该事项的记录；经 orphanRemoval 级联删除）。 */
@@ -774,7 +820,7 @@ public class TaskService {
             task.setBoard(req.board().trim());
         }
         task.setModule(req.module());
-        task.setTitle(req.title());
+        task.setTitle(req.title() == null ? null : req.title().trim());
         task.setDescription(req.description());
         if (req.status() != null && !req.status().isBlank()) {
             task.setStatus(req.status().trim());
@@ -788,6 +834,12 @@ public class TaskService {
         task.setPain(req.pain());
         task.setNextStep(req.nextStep());
         task.setDeadline(req.deadline());
+        // deadline_month 与 deadline 保持同步（导入路径同样维护该字段，编辑截止日期后不能留脏数据）
+        if (req.deadline() != null) {
+            task.setDeadlineMonth(req.deadline().toString().substring(0, 7));
+        } else {
+            task.setDeadlineMonth(null);
+        }
         task.setRisk(req.risk());
 
         task.getSubItems().clear();
@@ -875,7 +927,8 @@ public class TaskService {
             }
             for (int i = 0; i < ids.size(); i++) {
                 Task t = byId.get(ids.get(i));
-                if (t != null) {
+                // 置顶项不参与手动排序位置（排序查询 pinned 恒最前），跳过避免改写其 sort_order
+                if (t != null && !t.isPinned()) {
                     t.setSortOrder(i);
                 }
             }
@@ -905,7 +958,13 @@ public class TaskService {
                 blockById.put(id, requireTask(id));
             }
         }
-        List<Task> block = ids.stream().map(blockById::get).filter(Objects::nonNull).toList();
+        // 置顶项不在 rest（findAllNonPinned）中，若混入 block 会被塞进未置顶区间并改写 sort_order，
+        // 这里一并剔除，保持置顶项不参与手动排序位置
+        List<Task> block = ids.stream()
+                .map(blockById::get)
+                .filter(Objects::nonNull)
+                .filter(t -> !t.isPinned())
+                .toList();
         List<Task> result = new ArrayList<>(rest);
         result.addAll(idx, block);
         for (int i = 0; i < result.size(); i++) {

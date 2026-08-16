@@ -89,8 +89,15 @@ const { selectedIds, selectedCount, someSelected, allSelected, toggleRow, toggle
   fetchAllMatching,
 })
 
-// ---------- 手动排序：拖拽 ----------
-const { cardsGridEl, handleDragEnd } = useDragSort({ tasks, isManualSort, fetchFiltered })
+// ---------- 手动排序：拖拽（乐观更新：拖完本地即生效，后台持久化，失败才重拉回滚） ----------
+const { cardsGridEl, handleDragEnd } = useDragSort({
+  tasks,
+  isManualSort,
+  fetchFiltered,
+  applyOrder: (list) => {
+    filteredTasks.value = list
+  },
+})
 
 // ---------- 卡片跟进面板 ----------
 const { expandedId, togglePanel, onLogCountSync } = useCardPanel({ filteredTasks })
