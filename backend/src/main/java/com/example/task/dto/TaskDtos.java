@@ -53,11 +53,32 @@ public final class TaskDtos {
             String nextStep,
             LocalDate deadline,
             String risk,
+            boolean pinned,
+            Integer sortOrder,
             String notifyStatus,
             LocalDate updateDate,
             LocalDateTime updatedAt,
             List<String> subItems,
             Long logCount) {
+    }
+
+    /**
+     * 列表分页响应（keyset 游标分页）：items 为当前页；hasMore 是否还有下一页；
+     * nextCursor 为下一页游标（不透明字符串，前端原样回传；首页为 null）。
+     */
+    public record TaskPage(
+            List<TaskListItem> items,
+            boolean hasMore,
+            String nextCursor) {
+    }
+
+    /** 统计条带聚合（当前筛选范围）：总事项 / 亟待解决 / 进行中 / 高优先级 / 7 日内到期 */
+    public record TaskStats(
+            long total,
+            long urgent,
+            long ongoing,
+            long high,
+            long near) {
     }
 
     /** 跟进记录响应 */
@@ -81,6 +102,8 @@ public final class TaskDtos {
             String nextStep,
             LocalDate deadline,
             String risk,
+            boolean pinned,
+            Integer sortOrder,
             String notifyStatus,
             LocalDate updateDate,
             List<String> subItems,
@@ -167,6 +190,13 @@ public final class TaskDtos {
             String field,
             String message,
             String value) {
+    }
+
+    /** 手动排序重排请求：ids = 被移动的块（新顺序）；afterId/beforeId = 块在目标位置两端锚点（可为 null，均缺省时按 ids 整体重排）。 */
+    public record ReorderRequest(
+            List<Long> ids,
+            Long afterId,
+            Long beforeId) {
     }
 
     /** 批量导入结果 */

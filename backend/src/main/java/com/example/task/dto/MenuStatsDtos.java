@@ -10,12 +10,12 @@ public final class MenuStatsDtos {
     private MenuStatsDtos() {
     }
 
-    /** 菜单统计：全部数量 + 各看板分组 + 临时事项聚合 */
-    public record MenuStats(long allCount, List<GroupStat> groups, GroupStat temp) {
+    /** 菜单统计：全部数量 + 各看板分组（看板全部来自 t_board，动态） */
+    public record MenuStats(long allCount, List<GroupStat> groups) {
     }
 
-    /** 分组统计：分组 id + 数量 + 模块列表 */
-    public record GroupStat(String id, long count, List<ModuleStat> modules) {
+    /** 分组统计：看板 code + 展示信息 + 数量 + 模块列表 */
+    public record GroupStat(String id, String label, String accent, String prefix, long count, List<ModuleStat> modules) {
     }
 
     /** 模块统计：模块名 + 数量 */

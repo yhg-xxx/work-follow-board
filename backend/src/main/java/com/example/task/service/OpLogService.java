@@ -20,7 +20,7 @@ import java.util.List;
 @Service
 public class OpLogService {
 
-    private static final int MAX_LIMIT = 1000;
+    private static final int MAX_LIMIT = 500;
     private static final int DEFAULT_LIMIT = 300;
 
     private final OpLogRepository opLogRepository;
@@ -45,16 +45,24 @@ public class OpLogService {
         return toItem(opLogRepository.save(log));
     }
 
-    /** 组合条件查询，最新在前，limit 控制条数（默认 300，上限 1000）。 */
+    /**
+     * 游标分页查询：最新在前，cursor 为上一页最后一条的 id（按 id 倒序，更小的 id 是更早的记录），
+     * limit 控制单页条数（默认 300，上限 500）。多取一条判断是否还有下一页，nextCursor 供下次请求携带。
+     */
     @Transactional(readOnly = true)
-    public List<OpLogDtos.OpLogItem> list(List<String> actions, String keyword,
-                                          String dateFrom, String dateTo, Integer limit) {
+    public OpLogDtos.OpLogPage list(List<String> actions, String keyword,
+                                    String dateFrom, String dateTo, Long cursor, Integer limit) {
         List<String> act = (actions == null || actions.isEmpty()) ? null
                 : actions.stream().filter(a -> a != null && !a.isBlank()).map(String::trim).toList();
         int size = limit == null ? DEFAULT_LIMIT : Math.min(Math.max(limit, 1), MAX_LIMIT);
-        return opLogRepository.search(act, normalize(keyword),
-                        parseDateFrom(dateFrom), parseDateTo(dateTo), PageRequest.of(0, size))
-                .stream().map(this::toItem).toList();
+        // 多取一条用于判断是否还有下一页
+        List<OpLog> rows = opLogRepository.search(act, normalize(keyword),
+                        parseDateFrom(dateFrom), parseDateTo(dateTo), cursor, PageRequest.of(0, size + 1));
+        boolean hasMore = rows.size() > size;
+        if (hasMore) rows = rows.subList(0, size);
+        List<OpLogDtos.OpLogItem> items = rows.stream().map(this::toItem).toList();
+        Long nextCursor = items.isEmpty() ? null : items.get(items.size() - 1).id();
+        return new OpLogDtos.OpLogPage(items, hasMore, nextCursor);
     }
 
     private OpLogDtos.OpLogItem toItem(OpLog log) {

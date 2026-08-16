@@ -3,48 +3,24 @@ package com.example.task.repository;
 import com.example.task.entity.Task;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-public interface TaskRepository extends JpaRepository<Task, Long> {
+public interface TaskRepository extends JpaRepository<Task, Long>, TaskSearchRepository {
 
     Optional<Task> findByTaskCode(String taskCode);
-
-    /**
-     * 组合条件查询（所有条件均可为空，空表示不限制）。
-     * boards / statuses / modules / owners 为多值精确匹配（in）；keyword 为模糊匹配；
-     * deadlineFrom / deadlineTo 为截止日期闭区间。排序由 Sort 参数决定（按 deadline，null 排最后）。
-     * 注意：集合参数为 null 时表示不限制，切勿传空集合（JPQL in () 在 MySQL 下为语法错误）。
-     */
-    @Query("""
-            select t from Task t
-            where (:boards is null or t.board in :boards)
-              and (:statuses is null or t.status in :statuses)
-              and (:modules is null or t.module in :modules)
-              and (:owners is null or t.owner in :owners)
-              and (:deadlineFrom is null or t.deadline >= :deadlineFrom)
-              and (:deadlineTo is null or t.deadline <= :deadlineTo)
-              and (:keyword is null or :keyword = '' or t.title like concat('%', :keyword, '%')
-                    or t.taskCode like concat('%', :keyword, '%')
-                    or t.module like concat('%', :keyword, '%')
-                    or t.pain like concat('%', :keyword, '%'))
-            """)
-    List<Task> search(@Param("boards") List<String> boards,
-                      @Param("statuses") List<String> statuses,
-                      @Param("modules") List<String> modules,
-                      @Param("owners") List<String> owners,
-                      @Param("deadlineFrom") LocalDate deadlineFrom,
-                      @Param("deadlineTo") LocalDate deadlineTo,
-                      @Param("keyword") String keyword,
-                      Sort sort);
 
     /** 按 看板 + 工作模块 聚合计数（module 可能为 null）。 */
     @Query("select t.board, t.module, count(t) from Task t group by t.board, t.module")
     List<Object[]> countByBoardModule();
+
+    /** 按 看板 聚合计数（key: board code）。 */
+    @Query("select t.board, count(t) from Task t group by t.board")
+    List<Object[]> countByBoard();
 
     /** 各事项的跟进记录条数（key: 事项 id）。 */
     @Query("select l.task.id, count(l) from TaskLog l group by l.task.id")
@@ -75,4 +51,24 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     /** 指定看板下全部事项的 taskCode + module（用于生成下一个事项 ID）。 */
     @Query("select t.taskCode, t.module from Task t where t.board = :board")
     List<Object[]> findCodeAndModuleByBoard(@Param("board") String board);
+
+    // ---------- 模块管理（侧栏三点菜单）：重命名/删除时批量同步 t_task.module 文本 ----------
+
+    /** 模块重命名：批量把该看板下旧模块名的事项改为新名称。返回受影响条数。 */
+    @Modifying
+    @Query("update Task t set t.module = :to, t.updatedAt = CURRENT_TIMESTAMP where t.board = :board and t.module = :from")
+    int renameModule(@Param("board") String board, @Param("from") String from, @Param("to") String to);
+
+    /** 模块删除：批量清空该看板下该模块事项的模块字段。返回受影响条数。 */
+    @Modifying
+    @Query("update Task t set t.module = null, t.updatedAt = CURRENT_TIMESTAMP where t.board = :board and t.module = :name")
+    int clearModule(@Param("board") String board, @Param("name") String name);
+
+    /** 指定看板下某模块的事项数（模块不存在/无事项返回 0）。 */
+    @Query("select count(t) from Task t where t.board = :board and t.module = :name")
+    long countByBoardAndModule(@Param("board") String board, @Param("name") String name);
+
+    /** 全部未置顶事项，按调用方传入 Sort 排序（手动序 sort_order，null 排最后 + id 兜底），供区间重排时定位锚点。 */
+    @Query("select t from Task t where t.pinned = false")
+    List<Task> findAllNonPinned(Sort sort);
 }

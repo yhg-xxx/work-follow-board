@@ -70,6 +70,14 @@ public class Task {
     @Column(name = "risk", length = 512)
     private String risk;
 
+    /** 置顶：任意排序模式下排最前。 */
+    @Column(name = "pinned", nullable = false)
+    private boolean pinned = false;
+
+    /** 手动排序位置：仅「手动排序」模式下生效（null 排最后）。 */
+    @Column(name = "sort_order")
+    private Integer sortOrder;
+
     @Column(name = "notify_status", length = 16, nullable = false)
     private String notifyStatus = "NONE";
 
@@ -222,6 +230,22 @@ public class Task {
 
     public void setRisk(String risk) {
         this.risk = risk;
+    }
+
+    public boolean isPinned() {
+        return pinned;
+    }
+
+    public void setPinned(boolean pinned) {
+        this.pinned = pinned;
+    }
+
+    public Integer getSortOrder() {
+        return sortOrder;
+    }
+
+    public void setSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
     }
 
     public String getNotifyStatus() {

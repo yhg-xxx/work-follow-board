@@ -12,7 +12,6 @@ const rootEl = ref<HTMLElement | null>(null)
 defineExpose({ el: rootEl })
 
 const PAGE_SIZE = 300
-const MAX_LIMIT = 1000
 
 // 操作类型选项（顺序即展示顺序）
 const ACTION_OPTIONS: { value: OpLogAction; label: string }[] = [
@@ -46,6 +45,8 @@ const logs = ref<OpLogItem[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
 const hasMore = ref(false)
+// 游标分页：nextCursor 为当前列表最后一条的 id，用于拉取更早的下一页
+const nextCursor = ref<number | null>(null)
 
 const bodyRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -56,8 +57,9 @@ function fmtTime(s: string | null): string {
   return s.replace('T', ' ').slice(0, 19)
 }
 
-function buildQuery(limit: number): Record<string, unknown> {
-  const params: Record<string, unknown> = { limit }
+function buildQuery(cursor: number | null): Record<string, unknown> {
+  const params: Record<string, unknown> = { limit: PAGE_SIZE }
+  if (cursor != null) params.cursor = cursor
   if (filters.actions.length) params.action = filters.actions
   if (filters.dateRange) {
     params.dateFrom = filters.dateRange[0]
@@ -66,32 +68,37 @@ function buildQuery(limit: number): Record<string, unknown> {
   return params
 }
 
+/** 拉取第一页（最新），重置游标 */
 async function fetchFirst() {
   loading.value = true
   try {
-    const { data } = await listOpLogs(buildQuery(PAGE_SIZE))
-    logs.value = data
-    hasMore.value = data.length >= PAGE_SIZE
+    const { data } = await listOpLogs(buildQuery(null))
+    logs.value = data.items
+    hasMore.value = data.hasMore
+    nextCursor.value = data.nextCursor
     // 换筛选/刷新后回到列表顶部
     if (bodyRef.value) bodyRef.value.scrollTop = 0
   } catch {
     logs.value = []
     hasMore.value = false
+    nextCursor.value = null
   } finally {
     loading.value = false
     maybeFill()
   }
 }
 
+/** 基于游标拉取下一页并追加到列表尾部 */
 async function loadMore() {
   if (loadingMore.value || !hasMore.value) return
-  const nextLimit = Math.min(logs.value.length + PAGE_SIZE, MAX_LIMIT)
-  if (nextLimit <= logs.value.length) return
   loadingMore.value = true
   try {
-    const { data } = await listOpLogs(buildQuery(nextLimit))
-    logs.value = data
-    hasMore.value = data.length >= nextLimit && nextLimit < MAX_LIMIT
+    const { data } = await listOpLogs(buildQuery(nextCursor.value))
+    logs.value = logs.value.concat(data.items)
+    hasMore.value = data.hasMore
+    nextCursor.value = data.nextCursor
+  } catch {
+    // 加载失败保持现状，下次滚动触发重试
   } finally {
     loadingMore.value = false
     maybeFill()

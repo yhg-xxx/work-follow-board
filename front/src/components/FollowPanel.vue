@@ -3,7 +3,7 @@ import { nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TaskDetail, TaskLogItem } from '../api/task'
 import { addLog, deleteLog, getTask } from '../api/task'
-import { errMsg } from '../utils/taskShared'
+import { errMsg, localISODate } from '../utils/taskShared'
 import { logOp } from '../composables/useOpLog'
 
 const props = defineProps<{ taskId: number }>()
@@ -129,7 +129,8 @@ async function removeLog(log: TaskLogItem) {
 }
 
 onMounted(async () => {
-  logForm.logDate = new Date().toISOString().slice(0, 10)
+  // 本地时区今天：toISOString() 按 UTC 截取会在凌晨 0-8 点差一天
+  logForm.logDate = localISODate()
   try {
     detail.value = (await getTask(props.taskId)).data
     await nextTick()

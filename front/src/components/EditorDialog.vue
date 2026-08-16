@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { TaskListItem, TaskRequest } from '../api/task'
-import { createTask, getTask, nextTaskCode as fetchNextCodeApi, suggestModules, suggestOwners, updateTask } from '../api/task'
-import { BOARDS, PRIORITIES, STATUSES, errMsg } from '../utils/taskShared'
+import type { BoardItem, TaskListItem, TaskRequest } from '../api/task'
+import { createTask, getTask, listBoards, nextTaskCode as fetchNextCodeApi, suggestModules, suggestOwners, updateTask } from '../api/task'
+import { PRIORITIES, STATUSES, boardPrefix, errMsg } from '../utils/taskShared'
 import { logOp } from '../composables/useOpLog'
 
 const emit = defineEmits<{ (e: 'saved'): void }>()
@@ -22,8 +22,22 @@ function emptyForm(): TaskRequest {
   }
 }
 
-// ---------- 事项ID 自动生成（走后端：{看板前缀}-{模块字母}{序号}，如 QF-B03 / HF-C02） ----------
-const boardPrefix = (b?: string) => (b === 'happy' ? 'HF' : 'QF')
+// ---------- 看板选项（打开时从 /boards 动态拉取） ----------
+const boardOptions = ref<BoardItem[]>([])
+async function loadBoards() {
+  try {
+    boardOptions.value = (await listBoards()).data
+  } catch {
+    boardOptions.value = []
+  }
+}
+const boardMap = computed(() => Object.fromEntries(boardOptions.value.map((b) => [b.code, b])))
+// 当前选中看板（供配色/前缀）
+const currentBoard = computed(() => (form.board ? boardMap.value[form.board] : undefined))
+const boardAccent = computed(() => currentBoard.value?.accent ?? '#2B59C3')
+
+// ---------- 事项ID 自动生成（走后端：{看板前缀}-{模块字母}{序号}，如 QF-B03 / HF-C02 / LS-A01） ----------
+const boardPrefixOf = (b?: string) => boardPrefix(b ?? '', boardMap.value)
 
 async function fetchNextCode(board?: string, module?: string | null): Promise<string> {
   try {
@@ -68,6 +82,7 @@ function mergeOwnerIntoOptions(owner: string | null | undefined) {
 }
 
 async function open(task?: TaskListItem) {
+  await loadBoards() // 打开即拉最新看板列表（新建可选、编辑可改）
   if (task) {
     // 编辑
     editingId.value = task.id
@@ -160,7 +175,7 @@ async function save() {
     width="720px"
     destroy-on-close
     class="editor-dialog"
-    :class="form.board === 'happy' ? 'dlg-happy' : 'dlg-quanfa'"
+    :style="{ '--dlg-accent': boardAccent }"
   >
     <template #header>
       <div class="dlg-head">
@@ -168,7 +183,7 @@ async function save() {
           <div class="dlg-kicker">{{ editingId ? '编辑登记' : '新建登记' }} · 工作跟进台账</div>
           <div class="dlg-title">{{ editingId ? '编辑事项' : '新建事项' }}</div>
         </div>
-        <div class="id-stamp" :class="form.board === 'happy' ? 'st-happy' : 'st-quanfa'" :title="'系统按 ' + boardPrefix(form.board) + '-字母+序号 自动登记'">
+        <div class="id-stamp" :style="{ '--accent': boardAccent }" :title="'系统按 ' + boardPrefixOf(form.board) + '-字母+序号 自动登记'">
           <span class="id-code num">{{ form.taskCode || '——' }}</span>
           <span class="id-hint">自动登记 · 不可修改</span>
         </div>
@@ -181,19 +196,18 @@ async function save() {
         <div class="fg-eyebrow"><i />基本信息</div>
         <div class="fg-grid">
           <el-form-item label="看板分组" class="fg-1">
-            <div class="board-pick">
-              <button
-                v-for="b in BOARDS"
-                :key="b.value"
-                type="button"
-                class="board-card"
-                :class="[b.value, { on: form.board === b.value }]"
-                @click="form.board = b.value"
+            <el-select v-model="form.board" filterable placeholder="选择看板分组" style="width: 100%">
+              <el-option
+                v-for="b in boardOptions"
+                :key="b.code"
+                :label="b.name"
+                :value="b.code"
               >
-                <span class="bc-name">{{ b.label }}</span>
-                <span class="bc-prefix num">{{ boardPrefix(b.value) }}</span>
-              </button>
-            </div>
+                <span class="opt-swatch" :style="{ background: b.accent }" />
+                <span>{{ b.name }}</span>
+                <span class="opt-prefix num">{{ b.prefix }}</span>
+              </el-option>
+            </el-select>
           </el-form-item>
           <el-form-item label="工作模块" class="fg-1" required>
             <el-autocomplete
@@ -313,28 +327,22 @@ async function save() {
   align-items: flex-end;
   gap: 1px;
   padding: 6px 14px 5px;
-  border: 1px dashed var(--c-line-strong);
+  border: 1px dashed var(--stamp-border, var(--c-line-strong));
   border-radius: 8px;
-  background: var(--c-bg);
+  background: var(--stamp-bg, var(--c-bg));
   min-width: 128px;
 }
-.id-stamp.st-quanfa {
-  border-color: var(--c-quanfa-stamp-border);
-  background: var(--c-quanfa-stamp-bg);
-}
-.id-stamp.st-happy {
-  border-color: var(--c-happy-stamp-border);
-  background: var(--c-happy-stamp-bg);
+/* 看板身份色驱动印章配色（色块/边框由 accent 派生） */
+.id-stamp {
+  --stamp-bg: color-mix(in srgb, var(--accent, var(--c-blue)) 8%, var(--c-card));
+  --stamp-border: color-mix(in srgb, var(--accent, var(--c-blue)) 45%, transparent);
 }
 .id-stamp .id-code {
   font-size: 19px;
   font-weight: 700;
   letter-spacing: 0.05em;
   line-height: 1.2;
-  color: var(--c-blue);
-}
-.id-stamp.st-happy .id-code {
-  color: var(--c-happy);
+  color: var(--accent, var(--c-blue));
 }
 .id-stamp .id-hint {
   font-size: 11px;
@@ -378,60 +386,6 @@ async function save() {
 }
 .fg-grid .fg-2 {
   grid-column: 1 / -1;
-}
-
-/* 看板双卡选择（颜色即身份：蓝=全发 / 橙=会幸福） */
-.board-pick {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-.board-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 9px 14px;
-  border: 1px solid var(--c-line);
-  border-radius: 8px;
-  background: var(--c-card);
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
-}
-.board-card:hover {
-  border-color: var(--c-line-strong);
-}
-.board-card .bc-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--c-ink-soft);
-}
-.board-card .bc-prefix {
-  font-size: 12px;
-  color: var(--c-faint);
-  letter-spacing: 0.04em;
-}
-.board-card.quanfa.on {
-  border-color: var(--c-quanfa);
-  background: var(--c-quanfa-pick-bg);
-  box-shadow: inset 0 0 0 1px var(--c-quanfa);
-}
-.board-card.quanfa.on .bc-name {
-  color: var(--c-quanfa);
-}
-.board-card.quanfa.on .bc-prefix {
-  color: var(--c-quanfa);
-}
-.board-card.happy.on {
-  border-color: var(--c-happy);
-  background: var(--c-happy-pick-bg);
-  box-shadow: inset 0 0 0 1px var(--c-happy);
-}
-.board-card.happy.on .bc-name {
-  color: var(--c-happy);
-}
-.board-card.happy.on .bc-prefix {
-  color: var(--c-happy);
 }
 
 /* 子项编辑器 */
@@ -504,14 +458,28 @@ async function save() {
   padding-bottom: 4px;
 }
 
-/* 顶部身份色条：蓝=全发 / 橙=会幸福；同时收小默认 margin-top，保证对话框整体入屏 */
+/* 顶部身份色条：颜色 = 当前看板 accent；同时收小默认 margin-top，保证对话框整体入屏 */
 .editor-dialog.el-dialog,
 .el-overlay.editor-dialog .el-dialog {
   margin-top: 4vh;
-  border-top: 3px solid var(--c-quanfa);
+  border-top: 3px solid var(--dlg-accent, var(--c-quanfa));
 }
-.editor-dialog.dlg-happy.el-dialog,
-.el-overlay.editor-dialog.dlg-happy .el-dialog {
-  border-top-color: var(--c-happy);
+
+/* 看板分组下拉选项：颜色圆点 + 前缀（popper 由 teleport 渲染到 body，需非 scoped） */
+.editor-dialog .el-select-dropdown__item .opt-swatch {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: -1px;
+}
+.editor-dialog .el-select-dropdown__item .opt-prefix {
+  float: right;
+  margin-left: 12px;
+  font-size: 12px;
+  line-height: inherit;
+  color: var(--el-text-color-placeholder, #a8abb2);
+  letter-spacing: 0.04em;
 }
 </style>

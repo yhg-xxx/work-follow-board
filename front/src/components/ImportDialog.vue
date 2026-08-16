@@ -1,16 +1,32 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import ExcelJS from 'exceljs'
-import type { ImportBatchError, ImportMode, TaskBatchItem, TaskBatchLog, TaskDetail, TaskImportItem, TaskImportRequest, TaskListItem } from '../api/task'
-import { getTask, importBatch, listTasks } from '../api/task'
-import { MAIN_COLUMNS, PRIORITIES, STATUSES, LABEL_TO_KEY, cellToPlain, dateTag, downloadBlob, fmtISODate, normalizeBoard } from '../utils/taskShared'
+import type { ImportBatchError, ImportMode, TaskBatchItem, TaskBatchLog, TaskDetail, TaskImportItem, TaskListItem } from '../api/task'
+import { importBatch, listBoards, listTasks } from '../api/task'
+import { MAIN_COLUMNS, PRIORITIES, STATUSES, LABEL_TO_KEY, boardLabel, cellToPlain, dateTag, downloadBlob, fetchDetailsInBatches, fmtISODate, normalizeBoard } from '../utils/taskShared'
+import type { BoardMap } from '../utils/taskShared'
 import { logOp } from '../composables/useOpLog'
 
 const props = defineProps<{ totalCount: number }>()
 const emit = defineEmits<{ (e: 'done'): void }>()
 // 导入进行中状态（v-model 双向同步，供父组件工具栏「导入」按钮显示 loading）
 const importing = defineModel<boolean>('importing', { default: false })
+
+// ---------- 看板动态校验：打开导入时拉取 /boards ----------
+const boardMap = ref<BoardMap>({})
+async function loadBoardMap() {
+  try {
+    const { data } = await listBoards()
+    boardMap.value = Object.fromEntries(data.map((b) => [b.code, b]))
+  } catch {
+    boardMap.value = {}
+  }
+}
+/** 合法看板名提示文案（如 全发/会幸福/临时专项） */
+const boardNamesHint = computed(() => {
+  const names = Object.values(boardMap.value).map((b) => b.name)
+  return names.length ? names.join(' / ') : '请先配置看板'
+})
 
 // ---------- 导入：预览 Dialog 相关状态 ----------
 const importInput = ref<HTMLInputElement | null>(null)
@@ -55,6 +71,7 @@ const importCanConfirm = computed(() => {
 })
 
 function open() {
+  loadBoardMap() // 打开即拉最新看板列表（保证看板校验/中文名映射是最新的）
   importInput.value?.click()
 }
 defineExpose({ open })
@@ -80,9 +97,10 @@ function rowObjectToBatchItem(obj: Record<string, unknown>, rowIdx: number): { i
     if (!fieldKey) continue
     raw[fieldKey] = cellToPlain(obj[hdr]).trim()
   }
-  const board = normalizeBoard(raw.board)
+  const board = normalizeBoard(raw.board, boardMap.value)
   const title = raw.title
-  if (!board) errs.push({ rowIndex: rowIdx, field: '看板', message: '看板必填（全发/quanfa 或 会幸福/happy）', value: raw.board })
+  if (!board) errs.push({ rowIndex: rowIdx, field: '看板', message: `看板必填（${boardNamesHint.value} 或其 code）`, value: raw.board })
+  else if (!boardMap.value[board]) errs.push({ rowIndex: rowIdx, field: '看板', message: `看板值非法，应为 ${boardNamesHint.value} 之一`, value: raw.board })
   if (!title) errs.push({ rowIndex: rowIdx, field: '具体事项', message: '具体事项必填', value: raw.title })
   if (raw.priority && !PRIORITIES.includes(raw.priority))
     errs.push({ rowIndex: rowIdx, field: '优先级', message: `优先级必须是 ${PRIORITIES.join(' / ')}`, value: raw.priority })
@@ -124,11 +142,12 @@ function rowObjectToBatchItem(obj: Record<string, unknown>, rowIdx: number): { i
 /** 前端预校验 JSON 模式的导入 items（简单校验，详细留给后端） */
 function preValidateJSON(items: TaskBatchItem[]): ImportBatchError[] {
   const errs: ImportBatchError[] = []
+  const validBoards = Object.keys(boardMap.value)
   for (let i = 0; i < items.length; i++) {
     const it = items[i]!
     if (!it.board) errs.push({ rowIndex: i, field: '看板', message: '看板必填', value: it.board })
-    else if (!['quanfa', 'happy'].includes(it.board))
-      errs.push({ rowIndex: i, field: '看板', message: '看板值应为 quanfa 或 happy', value: it.board })
+    else if (!validBoards.includes(it.board))
+      errs.push({ rowIndex: i, field: '看板', message: `看板值应为 ${validBoards.join(' / ')}`, value: it.board })
     if (!it.title) errs.push({ rowIndex: i, field: '具体事项', message: '具体事项必填', value: String(it.title ?? '') })
     if (it.priority && !PRIORITIES.includes(it.priority))
       errs.push({ rowIndex: i, field: '优先级', message: `优先级必须是 ${PRIORITIES.join(' / ')}`, value: it.priority })
@@ -153,15 +172,14 @@ async function onImportFile(e: Event) {
   try {
     if (ext === 'json') {
       type = 'json'
+      // 先确保看板列表就绪（open() 是 fire-and-forget，文件可能先于看板请求返回）
+      if (!Object.keys(boardMap.value).length) await loadBoardMap()
       const json = JSON.parse(await file.text())
-      const quanfa: TaskImportItem[] = json?.data?.quanfa
-      const happy: TaskImportItem[] = json?.data?.happy
-      if (!Array.isArray(quanfa) || !Array.isArray(happy)) {
-        ElMessage.error('JSON 结构不符：需包含 data.quanfa 与 data.happy 两个数组')
-        return
-      }
-      if (!quanfa.length && !happy.length) {
-        ElMessage.error('导入数据为空')
+      // 动态按键分组：{data:{quanfa:[], happy:[], temp:[], ...}}；旧文件仅 quanfa/happy 两键仍兼容
+      const dataObj = json?.data && typeof json.data === 'object' ? json.data : {}
+      const entries = Object.entries(dataObj).filter(([, v]) => Array.isArray(v))
+      if (!entries.length) {
+        ElMessage.error('JSON 结构不符：需包含 data.{看板code} 数组（如 data.quanfa / data.temp）')
         return
       }
       const conv = (arr: TaskImportItem[], board: string): TaskBatchItem[] =>
@@ -190,16 +208,15 @@ async function onImportFile(e: Event) {
             })),
             updateDate: it.updateDate ?? null,
           }))
-      parsed = [...conv(quanfa, 'quanfa'), ...conv(happy, 'happy')]
+      parsed = entries.flatMap(([board, arr]) => conv(arr as TaskImportItem[], board))
       previewRows = parsed.slice(0, 5).map((it) => ({
-        事项ID: it.taskCode ?? '', 看板: it.board === 'happy' ? '会幸福' : '全发', 工作模块: it.module ?? '',
+        事项ID: it.taskCode ?? '', 看板: boardLabel(it.board, boardMap.value), 工作模块: it.module ?? '',
         具体事项: it.title, 当前状态: it.status ?? '', 优先级: it.priority ?? '', 负责人: it.owner ?? '',
         子项: (it.subItems ?? []).join('；'),
       }))
     } else if (ext === 'xlsx' || ext === 'xls' || ext === 'csv') {
       type = ext === 'csv' ? 'csv' : 'xlsx'
       const buf = await file.arrayBuffer()
-      const wb = new ExcelJS.Workbook()
       if (ext === 'csv') {
         // CSV：FileReader 读文本，按逗号分隔手动解析（exceljs 的 csvReader 太复杂）
         const text = new TextDecoder('utf-8').decode(buf)
@@ -253,6 +270,9 @@ async function onImportFile(e: Event) {
         // 存 rawRows 给重算映射用
         ;(importParsedItems as any)._rawRows = rawRows
       } else {
+        // exceljs 体积较大，仅解析 xlsx 时懒加载
+        const ExcelJS = await import('exceljs')
+        const wb = new ExcelJS.Workbook()
         await wb.xlsx.load(buf)
         const ws = wb.worksheets[0]
         if (!ws) throw new Error('Excel 中没有工作表')
@@ -351,13 +371,14 @@ function recomputeFromMapping() {
 async function autoBackupBeforeOverwrite(): Promise<boolean> {
   if (!importAutoBackup.value) return true
   try {
-    const { data: all } = await listTasks({})
+    const { data } = await listTasks({ all: true })
+    const all = data.items
     if (!all.length) return true
-    // 只拉有 logs 的
+    // 只拉有 logs 的（分批并发，避免一次性 Promise.all 打爆连接）
     const needLogs = all.filter((t) => (t.logCount ?? 0) > 0)
     const detailMap = new Map<number, TaskDetail>()
     if (needLogs.length) {
-      const ds = await Promise.all(needLogs.map((t) => getTask(t.id).then((r) => r.data).catch(() => null as TaskDetail | null)))
+      const ds = await fetchDetailsInBatches(needLogs.map((t) => t.id))
       for (const d of ds) if (d) detailMap.set(d.id, d)
     }
     const toImportItem = (t: TaskListItem): TaskImportItem => {
@@ -381,9 +402,13 @@ async function autoBackupBeforeOverwrite(): Promise<boolean> {
         updateDate: t.updateDate ? fmtISODate(t.updateDate) : undefined,
       }
     }
-    const payload: TaskImportRequest = {
-      quanfa: all.filter((t) => t.board === 'quanfa').map(toImportItem),
-      happy: all.filter((t) => t.board === 'happy').map(toImportItem),
+    // 看板按键动态构造（与导出备份格式一致）；boardMap 缺失时按数据实际出现过的 board 兜底
+    const boards = Object.keys(boardMap.value).length
+      ? Object.keys(boardMap.value)
+      : [...new Set(all.map((t) => t.board))]
+    const payload: Record<string, TaskImportItem[]> = {}
+    for (const board of boards) {
+      payload[board] = all.filter((t) => t.board === board).map(toImportItem)
     }
     const blob = new Blob([JSON.stringify({ data: payload }, null, 2)], { type: 'application/json;charset=utf-8;' })
     downloadBlob(blob, `导入前_自动备份_${dateTag()}.json`)

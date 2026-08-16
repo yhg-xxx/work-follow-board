@@ -30,11 +30,12 @@ public class OpLogController {
     }
 
     @GetMapping
-    public List<OpLogDtos.OpLogItem> list(@RequestParam(name = "action", required = false) List<String> actions,
-                                          @RequestParam(required = false) String keyword,
-                                          @RequestParam(required = false) String dateFrom,
-                                          @RequestParam(required = false) String dateTo,
-                                          @RequestParam(required = false) Integer limit) {
-        return opLogService.list(actions, keyword, dateFrom, dateTo, limit);
+    public OpLogDtos.OpLogPage list(@RequestParam(name = "action", required = false) List<String> actions,
+                                    @RequestParam(required = false) String keyword,
+                                    @RequestParam(required = false) String dateFrom,
+                                    @RequestParam(required = false) String dateTo,
+                                    @RequestParam(required = false) Long cursor,
+                                    @RequestParam(required = false) Integer limit) {
+        return opLogService.list(actions, keyword, dateFrom, dateTo, cursor, limit);
     }
 }

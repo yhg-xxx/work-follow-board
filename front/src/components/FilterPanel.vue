@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { BOARDS, STATUSES } from '../utils/taskShared'
+import { computed, ref } from 'vue'
+import { STATUSES } from '../utils/taskShared'
 import type { Filters } from '../utils/taskShared'
 
 // 受控组件：草稿筛选 / 负责人候选 / 定位样式 / 生效计数均由父组件持有并下发，本组件只负责 UI 与交互事件
-defineProps<{
+const props = defineProps<{
   draftFilters: Filters
+  boards: { label: string; value: string }[]   // 看板选项（由父组件按 /boards 动态构造）
   ownerOptions: string[]
   panelStyle: Record<string, string>
   activeCount: number
@@ -16,6 +17,13 @@ const emit = defineEmits<{
   (e: 'reset'): void
   (e: 'close'): void
 }>()
+
+// 看板行高亮：选中的看板集合 ≠ 全部看板时为「已生效」
+const boardRowOn = computed(() => {
+  const all = props.boards.map((b) => b.value)
+  const cur = props.draftFilters.boards
+  return !(cur.length === all.length && all.every((v) => cur.includes(v)))
+})
 
 // 供父组件做「点击面板外部关闭」判定
 const rootEl = ref<HTMLElement | null>(null)
@@ -35,13 +43,13 @@ defineExpose({ el: rootEl })
     </header>
     <div class="fp-body">
       <div class="filter-body">
-        <div class="filter-row" :class="{ on: !(draftFilters.boards.length === 2 && draftFilters.boards.includes('quanfa') && draftFilters.boards.includes('happy')) }">
+        <div class="filter-row" :class="{ on: boardRowOn }">
           <div class="filter-icon">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
           </div>
           <div class="filter-label">看板分组</div>
           <el-select v-model="draftFilters.boards" multiple collapse-tags placeholder="全选 / 可多选" style="width: 100%">
-            <el-option v-for="b in BOARDS" :key="b.value" :label="b.label" :value="b.value" />
+            <el-option v-for="b in boards" :key="b.value" :label="b.label" :value="b.value" />
           </el-select>
         </div>
         <div class="filter-row" :class="{ on: draftFilters.statuses.length > 0 }">

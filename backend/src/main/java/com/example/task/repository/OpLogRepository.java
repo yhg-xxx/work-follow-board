@@ -13,7 +13,8 @@ public interface OpLogRepository extends JpaRepository<OpLog, Long> {
 
     /**
      * 组合条件查询（全部可选）：action 多值精确匹配；keyword 模糊匹配 detail / target_code；
-     * dateFrom / dateTo 为 created_at 闭区间。按 id 倒序（最新在前），limit 由 Pageable 控制。
+     * dateFrom / dateTo 为 created_at 闭区间；cursor 为上一页最后一条的 id（游标分页，只取 id 更小的更早记录）。
+     * 按 id 倒序（最新在前），条数由 Pageable 控制。
      */
     @Query("""
             select o from OpLog o
@@ -22,11 +23,13 @@ public interface OpLogRepository extends JpaRepository<OpLog, Long> {
                     or o.targetCode like concat('%', :keyword, '%'))
               and (:dateFrom is null or o.createdAt >= :dateFrom)
               and (:dateTo is null or o.createdAt <= :dateTo)
+              and (:cursor is null or o.id < :cursor)
             order by o.id desc
             """)
     List<OpLog> search(@Param("actions") List<String> actions,
                        @Param("keyword") String keyword,
                        @Param("dateFrom") LocalDateTime dateFrom,
                        @Param("dateTo") LocalDateTime dateTo,
+                       @Param("cursor") Long cursor,
                        Pageable pageable);
 }

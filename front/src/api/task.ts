@@ -20,6 +20,8 @@ export interface TaskListItem {
   nextStep: string | null
   deadline: string | null
   risk: string | null
+  pinned: boolean
+  sortOrder: number | null
   notifyStatus: string
   updateDate: string | null
   updatedAt: string | null
@@ -158,7 +160,25 @@ export interface ImportBatchResult {
 }
 
 // ---------- API ----------
-export const listTasks = (params: Record<string, unknown>) => http.get<TaskListItem[]>('/tasks', { params })
+/** 列表分页响应（keyset 游标分页）：items 当前页；hasMore 是否还有下一页；nextCursor 下一页游标（首页为 null） */
+export interface TaskPage {
+  items: TaskListItem[]
+  hasMore: boolean
+  nextCursor: string | null
+}
+
+/** 统计条带聚合（当前筛选范围）：总事项 / 亟待解决 / 进行中 / 高优先级 / 7 日内到期 */
+export interface TaskStats {
+  total: number
+  urgent: number
+  ongoing: number
+  high: number
+  near: number
+}
+
+/** 列表查询：cursor 为上一页 nextCursor（首页不传）；limit 单页条数；all=true 一次返回全部（导出/全选用） */
+export const listTasks = (params: Record<string, unknown>) => http.get<TaskPage>('/tasks', { params })
+export const taskStats = (params: Record<string, unknown>) => http.get<TaskStats>('/tasks/stats', { params })
 export const getTask = (id: number) => http.get<TaskDetail>(`/tasks/${id}`)
 
 // ---------- 侧边栏菜单聚合统计（替代全量拉取） ----------
@@ -168,13 +188,15 @@ export interface MenuModuleStat {
 }
 export interface MenuGroupStat {
   id: string
+  label: string
+  accent: string
+  prefix: string
   count: number
   modules: MenuModuleStat[]
 }
 export interface MenuStats {
   allCount: number
   groups: MenuGroupStat[]
-  temp: MenuGroupStat
 }
 
 // ---------- 菜单统计 / 负责人 / 模块 / 下一事项ID（按需请求） ----------
@@ -197,6 +219,53 @@ export const deleteLog = (taskId: number, logId: number) => http.delete(`/tasks/
 export const notifyTask = (id: number, scene?: string) =>
   http.post<TaskDetail>(`/tasks/${id}/notify`, null, { params: { scene } })
 export const notifyLogs = (taskId: number) => http.get<NotifyLogItem[]>('/notify-logs', { params: { taskId } })
+export const pinTask = (id: number, pinned: boolean) => http.patch<TaskDetail>(`/tasks/${id}/pin`, { pinned })
+/** 手动排序重排：ids = 被移动的块（新顺序）；afterId/beforeId = 两端锚点（可省略，均缺省时按 ids 整体重排） */
+export const reorderTasks = (body: { ids: number[]; afterId?: number | null; beforeId?: number | null }) =>
+  http.put('/tasks/reorder', body)
+
+// ---------- 看板管理（/api/boards，t_board 动态看板） ----------
+export interface BoardItem {
+  id: number
+  code: string
+  name: string
+  accent: string
+  prefix: string
+  sortOrder: number
+  systemFlag: boolean
+  taskCount: number
+}
+
+export interface BoardRequest {
+  code?: string
+  name: string
+  accent: string
+  prefix: string
+  sortOrder?: number
+}
+
+export const listBoards = () => http.get<BoardItem[]>('/boards')
+export const createBoard = (data: BoardRequest) => http.post<BoardItem>('/boards', data)
+export const updateBoard = (id: number, data: Partial<BoardRequest>) => http.put<BoardItem>(`/boards/${id}`, data)
+export const deleteBoard = (id: number) => http.delete(`/boards/${id}`)
+export const reorderBoards = (ids: number[]) => http.put('/boards/reorder', { ids })
+
+// ---------- 工作模块管理（/api/modules，t_module 注册表：侧栏三点菜单） ----------
+export interface ModuleItem {
+  id: number
+  board: string
+  name: string
+  sortOrder: number
+  taskCount: number
+}
+
+export const listModules = (board?: string) =>
+  http.get<ModuleItem[]>('/modules', { params: { board: board || undefined } })
+export const createModule = (data: { board: string; name: string }) => http.post<ModuleItem>('/modules', data)
+export const renameModule = (data: { board: string; from: string; to: string }) =>
+  http.put<ModuleItem>('/modules/rename', data)
+export const deleteModule = (board: string, name: string) =>
+  http.delete<number>('/modules', { params: { board, name } })
 
 // ---------- 操作日志（/api/op-logs） ----------
 export type OpLogAction =
@@ -219,6 +288,13 @@ export interface OpLogItem {
   createdAt: string
 }
 
+/** 操作日志分页响应（游标分页：nextCursor 为下一页起点，hasMore 表示是否还有更多） */
+export interface OpLogPage {
+  items: OpLogItem[]
+  hasMore: boolean
+  nextCursor: number | null
+}
+
 export interface OpLogRequest {
   action: OpLogAction
   targetType?: string
@@ -228,4 +304,4 @@ export interface OpLogRequest {
 }
 
 export const recordOpLog = (data: OpLogRequest) => http.post<OpLogItem>('/op-logs', data)
-export const listOpLogs = (params: Record<string, unknown>) => http.get<OpLogItem[]>('/op-logs', { params })
+export const listOpLogs = (params: Record<string, unknown>) => http.get<OpLogPage>('/op-logs', { params })

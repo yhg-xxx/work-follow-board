@@ -4,6 +4,7 @@ import { RouterView } from 'vue-router'
 import ThemeToggle from './components/ThemeToggle.vue'
 import ClockLabel from './components/ClockLabel.vue'
 import OpLogPanel from './components/OpLogPanel.vue'
+import { isInsideElementPlusPopup } from './utils/dom'
 
 // ---------- 操作日志悬浮面板（贴 header 入口按钮，fixed 定位） ----------
 const opPanelVisible = ref(false)
@@ -40,33 +41,6 @@ function onResize() {
 }
 
 // 点击面板外部 + 不在按钮上时关闭；Element Plus 弹层（teleport 到 body）内不关
-const EP_POPUP_SELECTORS = [
-  '.el-select-dropdown',
-  '.el-autocomplete-suggestion',
-  '.el-picker-panel',
-  '.el-date-picker',
-  '.el-time-panel',
-  '.el-popper',
-  '.el-dropdown-menu',
-  '.el-cascader__dropdown',
-  '.el-color-picker__panel',
-  '.el-transfer-panel',
-]
-function isInsideEpPopup(tgt: EventTarget | null): boolean {
-  if (!tgt) return false
-  let el: Element | null = (tgt as any).nodeType === 1 ? (tgt as Element) : (tgt as Element)?.parentElement ?? null
-  while (el) {
-    for (const sel of EP_POPUP_SELECTORS) {
-      try {
-        if (el.matches(sel)) return true
-      } catch {
-        /* IE-like fallback: skip */
-      }
-    }
-    el = el.parentElement
-  }
-  return false
-}
 function onDocClick(e: MouseEvent) {
   if (!opPanelVisible.value) return
   const target = e.target as Node | null
@@ -76,7 +50,7 @@ function onDocClick(e: MouseEvent) {
   // 点在面板内部：不关
   if (opPanelRef.value?.el && opPanelRef.value.el.contains(target)) return
   // 点在 Element Plus teleport 到 body 的弹层上（面板控件触发的）：不关
-  if (isInsideEpPopup(target)) return
+  if (isInsideElementPlusPopup(target)) return
   opPanelVisible.value = false
 }
 

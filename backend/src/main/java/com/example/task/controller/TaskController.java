@@ -33,15 +33,31 @@ public class TaskController {
     }
 
     @GetMapping("/tasks")
-    public List<TaskDtos.TaskListItem> list(@RequestParam(name = "board", required = false) List<String> boards,
-                                            @RequestParam(name = "status", required = false) List<String> statuses,
-                                            @RequestParam(name = "module", required = false) List<String> modules,
-                                            @RequestParam(name = "owner", required = false) List<String> owners,
-                                            @RequestParam(required = false) String keyword,
-                                            @RequestParam(required = false) String deadlineFrom,
-                                            @RequestParam(required = false) String deadlineTo,
-                                            @RequestParam(required = false) String sortOrder) {
-        return taskService.list(boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo, sortOrder);
+    public TaskDtos.TaskPage list(@RequestParam(name = "board", required = false) List<String> boards,
+                                  @RequestParam(name = "status", required = false) List<String> statuses,
+                                  @RequestParam(name = "module", required = false) List<String> modules,
+                                  @RequestParam(name = "owner", required = false) List<String> owners,
+                                  @RequestParam(required = false) String keyword,
+                                  @RequestParam(required = false) String deadlineFrom,
+                                  @RequestParam(required = false) String deadlineTo,
+                                  @RequestParam(required = false) String sortOrder,
+                                  @RequestParam(required = false) String cursor,
+                                  @RequestParam(required = false) Integer limit,
+                                  @RequestParam(required = false, defaultValue = "false") boolean all) {
+        return taskService.list(boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo,
+                sortOrder, cursor, limit, all);
+    }
+
+    /** 统计条带聚合（与 /tasks 同套筛选条件）。 */
+    @GetMapping("/tasks/stats")
+    public TaskDtos.TaskStats stats(@RequestParam(name = "board", required = false) List<String> boards,
+                                    @RequestParam(name = "status", required = false) List<String> statuses,
+                                    @RequestParam(name = "module", required = false) List<String> modules,
+                                    @RequestParam(name = "owner", required = false) List<String> owners,
+                                    @RequestParam(required = false) String keyword,
+                                    @RequestParam(required = false) String deadlineFrom,
+                                    @RequestParam(required = false) String deadlineTo) {
+        return taskService.stats(boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo);
     }
 
     @GetMapping("/tasks/menu-stats")
@@ -104,6 +120,19 @@ public class TaskController {
     public TaskDtos.TaskDetail transition(@PathVariable Long id,
                                           @RequestParam String status) {
         return taskService.transition(id, status);
+    }
+
+    /** 置顶/取消置顶：body {pinned: true|false}。 */
+    @PatchMapping("/tasks/{id}/pin")
+    public TaskDtos.TaskDetail pin(@PathVariable Long id, @RequestBody Map<String, Boolean> body) {
+        boolean pinned = body != null && Boolean.TRUE.equals(body.get("pinned"));
+        return taskService.pin(id, pinned);
+    }
+
+    /** 手动排序重排：body {ids: [...], afterId?, beforeId?}，ids 为新顺序（区间移动时为被移动的块）。 */
+    @PutMapping("/tasks/reorder")
+    public void reorder(@RequestBody TaskDtos.ReorderRequest req) {
+        taskService.reorder(req);
     }
 
     @PostMapping("/tasks/{id}/logs")
