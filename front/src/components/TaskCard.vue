@@ -12,6 +12,7 @@ import {
   riskIsStar,
   statusDot,
 } from '../utils/cardFormat'
+import TruncTip from './TruncTip.vue'
 
 defineProps<{
   task: TaskListItem
@@ -54,8 +55,7 @@ const emit = defineEmits<{
     <header class="card-head">
       <span v-if="isManualSort" class="drag-handle" title="拖拽调整顺序" aria-hidden="true">⋮⋮</span>
       <div class="card-title-wrap">
-        <h3 class="card-title" v-html="hl(task.title, keyword)" />
-        <span class="title-tip">{{ task.title }}</span>
+        <TruncTip tag="h3" class="card-title" :html="hl(task.title, keyword)" :lines="1" />
       </div>
       <el-checkbox
         class="card-check"
@@ -71,34 +71,34 @@ const emit = defineEmits<{
         <i class="dot" />{{ task.status }}
       </span>
       <span class="pri-pill" :class="priClass(task.priority)">{{ task.priority }}</span>
-      <span class="card-owner">{{ task.owner || '未指派' }}</span>
+      <TruncTip tag="span" class="card-owner" :text="task.owner || '未指派'" :lines="1" />
     </div>
 
-    <p v-if="task.module" class="card-module" v-html="hl(task.module, keyword)" />
+    <TruncTip v-if="task.module" tag="p" class="card-module" :html="hl(task.module, keyword)" :lines="1" />
 
     <!-- 除跟进记录外的其余字段 -->
     <dl class="card-lines">
       <div v-if="task.description" class="card-line">
         <dt>描述</dt>
-        <dd v-html="hl(task.description, keyword)" />
+        <dd><TruncTip :html="hl(task.description, keyword)" :lines="2" /></dd>
       </div>
-      <div v-if="task.collab" class="card-line card-line-1">
+      <div v-if="task.collab" class="card-line">
         <dt>协作</dt>
-        <dd>{{ task.collab }}</dd>
+        <dd><TruncTip :text="task.collab" :lines="1" /></dd>
       </div>
       <div v-if="task.pain" class="card-line">
         <dt>痛点</dt>
-        <dd v-html="hl(task.pain, keyword)" />
+        <dd><TruncTip :html="hl(task.pain, keyword)" :lines="2" /></dd>
       </div>
       <div v-if="task.nextStep" class="card-line">
         <dt>下一步</dt>
-        <dd v-html="hl(task.nextStep, keyword)" />
+        <dd><TruncTip :html="hl(task.nextStep, keyword)" :lines="2" /></dd>
       </div>
       <div v-if="task.risk" class="card-line">
         <dt>风险</dt>
-        <dd :class="{ 'risk-star': riskIsStar(task.risk) }" v-html="hl(task.risk, keyword)" />
+        <dd :class="{ 'risk-star': riskIsStar(task.risk) }"><TruncTip :html="hl(task.risk, keyword)" :lines="2" /></dd>
       </div>
-      <div v-if="task.subItems?.length" class="card-line card-line-1">
+      <div v-if="task.subItems?.length" class="card-line">
         <dt>子项</dt>
         <dd class="card-sub-list">
           <span v-for="(s, i) in task.subItems" :key="i" class="sub-tag">{{ s }}</span>
@@ -197,44 +197,16 @@ const emit = defineEmits<{
   align-items: flex-start;
   gap: 6px;
 }
-/* 标题容器：负责占位，气泡可溢出容器显示（标题本身裁剪） */
+/* 标题容器：负责占位（气泡定位已下沉到 TruncTip 组件根） */
 .card-title-wrap {
   flex: 1;
   min-width: 0;
-  position: relative;
 }
 .card-title {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
   color: var(--c-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* 标题悬浮气泡：显示完整标题（纯文本，无关键词高亮标记） */
-.title-tip {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: calc(100% + 6px);
-  z-index: 12;
-  max-width: 340px;
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--c-card);
-  border: 1px solid var(--c-line-strong);
-  box-shadow: var(--shadow-card-hover);
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 1.5;
-  white-space: normal;
-  word-break: break-word;
-  color: var(--c-ink);
-  pointer-events: none;
-}
-.card-title-wrap:hover .title-tip {
-  display: block;
 }
 .card-check {
   flex: 0 0 auto;
@@ -263,13 +235,10 @@ const emit = defineEmits<{
   cursor: grabbing;
 }
 
-/* 模块名 */
+/* 模块名（截断由 TruncTip 内层承担） */
 .card-module {
   font-size: 12px;
   color: var(--c-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 状态 / 优先级 / 负责人 */
@@ -284,9 +253,6 @@ const emit = defineEmits<{
   max-width: 42%;
   font-size: 12px;
   color: var(--c-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 卡片底部：更新/截止 / 跟进入口 / 编辑 */
@@ -378,18 +344,10 @@ const emit = defineEmits<{
 .card-line dd {
   flex: 1;
   min-width: 0;
-  word-break: break-word;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .card-line dd.risk-star {
   color: var(--c-st-urgent);
   font-weight: 600;
-}
-.card-line-1 dd {
-  -webkit-line-clamp: 1;
 }
 .card-sub-list {
   display: flex !important;
