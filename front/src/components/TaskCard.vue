@@ -71,7 +71,7 @@ const emit = defineEmits<{
         <i class="dot" />{{ task.status }}
       </span>
       <span class="pri-pill" :class="priClass(task.priority)">{{ task.priority }}</span>
-      <TruncTip tag="span" class="card-owner" :text="task.owner || '未指派'" :lines="1" />
+      <TruncTip tag="span" class="card-owner" :html="task.owner ? hl(task.owner, keyword) : '未指派'" :lines="1" />
     </div>
 
     <TruncTip v-if="task.module" tag="p" class="card-module" :html="hl(task.module, keyword)" :lines="1" />
@@ -84,7 +84,7 @@ const emit = defineEmits<{
       </div>
       <div v-if="task.collab" class="card-line">
         <dt>协作</dt>
-        <dd><TruncTip :text="task.collab" :lines="1" /></dd>
+        <dd><TruncTip :html="hl(task.collab, keyword)" :lines="1" /></dd>
       </div>
       <div v-if="task.pain" class="card-line">
         <dt>痛点</dt>

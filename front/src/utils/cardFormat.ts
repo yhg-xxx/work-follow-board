@@ -5,12 +5,16 @@ import { boardLabel } from './taskShared'
 export const escHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
 
+// 正则特殊字符转义（使输入按字面文本参与匹配）
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
 // 搜索关键词高亮（先转义防注入，再包 <mark>）；keyword 为空时仅转义
+// 与后端一致：按空白拆词，逐词各自高亮（AND 语义下各词可命中不同字段）
 export function hl(text: string | null | undefined, keyword: string): string {
   if (!text) return '—'
-  const kw = keyword.trim()
-  if (!kw) return escHtml(text)
-  const re = new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  const terms = keyword.trim().split(/\s+/).filter(Boolean)
+  if (!terms.length) return escHtml(text)
+  const re = new RegExp(`(${terms.map(escapeRe).join('|')})`, 'gi')
   return text
     .split(re)
     .map((p, i) => (i % 2 === 1 ? `<mark class="hl">${escHtml(p)}</mark>` : escHtml(p)))

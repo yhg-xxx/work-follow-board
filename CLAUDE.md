@@ -33,7 +33,7 @@
 - 操作日志悬浮面板（2026-08-07 由独立路由 `/plan` 改为主页悬浮框，路由与 OpLogView.vue 已删除）：顶部 header「操作日志」按钮触发，面板 `position:fixed` 贴按钮下方（宽 `min(480px, 100vw-24px)` × 高 `min(60vh, 520px)`，`lp-in` 滑入）；顶部筛选一行 = 日期区间 + 操作类型多选；下方**紧凑两行列表**（上行：等宽时间 + 类型彩色徽标 + 事项ID，下行：详情），时间倒序（最新在上），滚动到底自动加载（首次 300 条）；打开时拉取 + 监听 `op-logged` 事件自动刷新（`useOpLog.logOp` 成功后广播）+ 手动刷新按钮；关闭方式：关闭按钮 / 再点入口 / 点面板外（沿用 EP 弹层守卫）
 - 列表筛选 / 排序（工具栏单行布局）
   - **工具栏单行**：左侧「搜索框 + 排序下拉按钮 + 高级筛选按钮」，右侧「导入 / 导出 / 新建 / 全选 / 删除」，弹性水平排布，窄屏自动横滚（toolbar 内 `overflow-x:auto`），不移用两行布局
-  - **搜索框**：独立关键词搜索（事项 ID / 名称 / 工作模块），不占用高级筛选项，回车/按钮触发，搜索结果 <mark> 高亮
+  - **搜索框**：独立全文搜索（不占用高级筛选项），后端按空白拆词 **AND** 扫描主表 9 个可搜字段（标题/ID/模块/描述/负责人/协作方/痛点/下一步/风险），各词可落在不同字段；用户输入里的 `\ % _` 按字面转义；回车/按钮触发，卡片命中的词按词各自 `<mark>` 高亮（含负责人/协作方）
   - **排序下拉**（el-dropdown）：4 项无默认占位：截止日期正序（先到先处理，默认）/ 截止日期倒序 / 优先级高→低 / 更新时间新→旧，已选项前加 ✓，禁用重复选择
   - **高级筛选悬浮面板**（与跟进面板同风格：`lp-in` 滑入动画 / 头部 + 滚动体 + 底部重置/应用）：4 行筛选项（看板分组多选 / 事项状态多选 / 负责人 el-autocomplete 自动补全 / 截止日期区间 daterange），无关键词行（避免与外部搜索框重复）；面板用红色徽标计数「已应用的筛选数」，面板头部显示「当前草稿中生效的筛选数」；关闭时草稿不清空，重新打开会回填；点击「应用筛选」才同步到 `filters` 并刷新列表、同步关闭面板
 - 统计条带（工具栏上方）：总事项 / 亟待解决 / 进行中 / 7 日内到期，4 项分色数值（等宽数字）
@@ -86,7 +86,7 @@ TMO/
 
 ## REST API（/api）
 
-- `GET /tasks`：列表（可按 board / status / owner / keyword / deadlineFrom / deadlineTo 过滤；返回卡片全字段 + logCount + subItems，跟进记录 logs 仅在详情接口返回）
+- `GET /tasks`：列表（可按 board / status / owner / keyword / deadlineFrom / deadlineTo 过滤；keyword 为全文搜索：空白拆词 AND，扫描主表 title/taskCode/module/description/owner/collab/pain/nextStep/risk；返回卡片全字段 + logCount + subItems，跟进记录 logs 仅在详情接口返回）
 - `GET /tasks/owners?q=`：负责人去重列表（编辑弹窗负责人候选）
 - `GET /tasks/{id}`：详情
 - `POST /tasks`：新建
@@ -138,3 +138,9 @@ TMO/
 ### 5. 主题挂点确认：`<html data-theme="dark" class="dark">` 双属性
 - `applyTheme()` 会同步写 `<html>` 的 `data-theme="dark"`（驱动我们自己的语义令牌）与 `class="dark"`（驱动 Element Plus 官方 dark/css-vars.css 变量）。
 - 两者都挂在 `<html>`，因此 teleport 到 body 的 EP 弹层（直接子节点）能正确命中 `html.dark` 的 EP 深色变量，不需要额外 `popper-class` 补丁。
+
+### 6. 全文搜索改造（2026-08-20）：扩展 LIKE，不上 MySQL 原生全文索引
+- **需求背景**：搜索框原本只 LIKE 4 个字段（title/taskCode/module/pain），改为全文搜索。
+- **决策**：LIKE 扩到主表全部 9 个可读文本字段（title/taskCode/module/description/owner/collab/pain/nextStep/risk）+ 空白拆词 AND；**不采用 MySQL 原生全文索引 MATCH...AGAINST**。
+- **选型教训**：MySQL 默认全文索引按空格分词，中文需 `WITH PARSER ngram`，而 ngram 默认从 2 字起——**单个中文字搜不到**；且 MATCH 进不了现有 keyset 游标 JPQL 结构，searchPage/countTotal/countStats 三处都得改原生 SQL。对单用户小看板，`%kw%` LIKE 全表扫性能无压力，把用户输入里的 `\ % _` 转义即可，零索引零迁移。
+- **语义约定**：空格拆词 + AND（每词命中任一字段即可，各词可落在不同字段）；前端 `hl()` 同步升级为逐词高亮（见 cardFormat.ts），`owner/collab` 补上高亮。

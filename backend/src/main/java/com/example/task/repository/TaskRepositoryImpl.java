@@ -125,10 +125,23 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
         addIn(conds, params, "t.owner", owners);
         String kw = keyword == null ? null : keyword.trim();
         if (kw != null && !kw.isEmpty()) {
-            int p = params.size() + 1;
-            conds.add("(t.title like ?" + p + " or t.taskCode like ?" + p
-                    + " or t.module like ?" + p + " or t.pain like ?" + p + ")");
-            params.add("%" + kw + "%");
+            // 全文搜索：按空白拆词，每个词须命中任一可搜字段（AND 语义，各词可落在不同字段）
+            for (String term : kw.split("\\s+")) {
+                if (term.isEmpty()) {
+                    continue;
+                }
+                int p = params.size() + 1;
+                conds.add("(t.title like ?" + p
+                        + " or t.taskCode like ?" + p
+                        + " or t.module like ?" + p
+                        + " or t.description like ?" + p
+                        + " or t.owner like ?" + p
+                        + " or t.collab like ?" + p
+                        + " or t.pain like ?" + p
+                        + " or t.nextStep like ?" + p
+                        + " or t.risk like ?" + p + ")");
+                params.add("%" + escapeLike(term) + "%");
+            }
         }
         if (deadlineFrom != null) {
             addSingle(conds, params, "t.deadline >= ?", deadlineFrom);
@@ -137,6 +150,11 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
             addSingle(conds, params, "t.deadline <= ?", deadlineTo);
         }
         return conds;
+    }
+
+    /** LIKE 通配符转义：把用户输入里的 \\ % _ 按字面匹配，避免搜索词被当作通配符。 */
+    private static String escapeLike(String s) {
+        return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private void addIn(List<String> conds, List<Object> params, String col, List<String> values) {

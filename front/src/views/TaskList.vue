@@ -340,7 +340,7 @@ onBeforeUnmount(() => {
           <div class="search-box">
             <el-input
               v-model="keywordInput"
-              placeholder="搜索事项ID/名称/工作模块..."
+              placeholder="搜索标题/负责人/痛点··· 空格分隔"
               clearable
               style="width: 260px"
               @keyup.enter="applyKeyword"
