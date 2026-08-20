@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -102,6 +103,37 @@ public class ModuleService {
         String n = requireName(name);
         moduleRepository.findByBoardAndName(b, n).ifPresent(moduleRepository::delete);
         return taskRepository.clearModule(b, n);
+    }
+
+    /**
+     * 重排：按 names 顺序写注册表 sort_order；未注册的模块名自动创建注册（实现侧栏任意排序）。
+     * 前端每次发送该看板的完整可见模块列表，因此重排后注册表顺序即等于侧栏顺序。
+     */
+    @Transactional
+    public void reorder(ModuleDtos.ModuleReorderRequest req) {
+        if (req == null || req.board() == null || req.board().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "看板不能为空");
+        }
+        String board = req.board().trim();
+        boardRepository.findByCode(board)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "看板不存在: " + board));
+        if (req.names() == null || req.names().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "模块顺序不能为空");
+        }
+        List<Module> toSave = new ArrayList<>();
+        for (int i = 0; i < req.names().size(); i++) {
+            String name = requireName(req.names().get(i));
+            Module m = moduleRepository.findByBoardAndName(board, name)
+                    .orElseGet(() -> {
+                        Module created = new Module();
+                        created.setBoard(board);
+                        created.setName(name);
+                        return created;
+                    });
+            m.setSortOrder(i);
+            toSave.add(m);
+        }
+        moduleRepository.saveAll(toSave);
     }
 
     /** 该看板下是否存在同名模块：注册表命中 或 任务中实际存在（含 0 条以外的场景）。 */

@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { createBoard, createModule, deleteBoard, deleteModule, renameModule, updateBoard } from '../api/task'
+import { createBoard, createModule, deleteBoard, deleteModule, renameModule, reorderModules, updateBoard } from '../api/task'
 import type { BoardMap, MenuGroup } from '../utils/taskShared'
 import { errMsg } from '../utils/taskShared'
 import { logOp } from './useOpLog'
@@ -13,8 +13,10 @@ export function useBoardManage(params: {
   reload: () => void
   /** 删除看板后若当前导航指向该看板，由组合根复位导航 */
   onBoardDeleted: (code: string) => void
+  /** 模块拖拽重排后的乐观本地更新（失败回滚走 reload） */
+  applyModuleOrder: (board: string, names: string[]) => void
 }) {
-  const { boardMap, menuGroups, reload, onBoardDeleted } = params
+  const { boardMap, menuGroups, reload, onBoardDeleted, applyModuleOrder } = params
 
   // 看板 code → 看板 id（重命名/改色/删除按 id 调后端）
   const boardIdByCode = computed(() =>
@@ -131,5 +133,17 @@ export function useBoardManage(params: {
     }
   }
 
-  return { boardIdByCode, onCreateBoard, onRenameBoard, onRecolorBoard, onDeleteBoard, onCreateModule, onRenameModule, onDeleteModule }
+  /** 拖拽重排：先乐观更新本地菜单，再持久化；失败回滚（Sortable 已挪好 DOM，靠 reload 拉回真实顺序） */
+  async function onReorderModules({ board, names }: { board: string; names: string[] }) {
+    applyModuleOrder(board, names)
+    try {
+      await reorderModules(board, names)
+      logOp({ action: 'UPDATE', targetType: 'module', targetCode: board, detail: `调整 ${board} 工作模块顺序` })
+    } catch (err: any) {
+      ElMessage.error('排序失败：' + errMsg(err))
+      reload()
+    }
+  }
+
+  return { boardIdByCode, onCreateBoard, onRenameBoard, onRecolorBoard, onDeleteBoard, onCreateModule, onRenameModule, onDeleteModule, onReorderModules }
 }

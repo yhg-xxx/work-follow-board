@@ -41,6 +41,11 @@ public class ModuleController {
         return moduleService.rename(req);
     }
 
+    @PutMapping("/reorder")
+    public void reorder(@RequestBody ModuleDtos.ModuleReorderRequest req) {
+        moduleService.reorder(req);
+    }
+
     @DeleteMapping
     public long delete(@RequestParam String board, @RequestParam String name) {
         return moduleService.delete(board, name);

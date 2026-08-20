@@ -1,6 +1,6 @@
 // 当前导航选择 + 左侧菜单统计（看板分组/模块，来自后端聚合接口）
 import { computed, reactive, ref } from 'vue'
-import type { MenuStats } from '../api/task'
+import type { MenuModuleStat, MenuStats } from '../api/task'
 import { menuStats as fetchMenuStatsApi } from '../api/task'
 import type { MenuGroup, NavGroupId } from '../utils/taskShared'
 
@@ -60,6 +60,20 @@ export function useMenuStats() {
     }
   }
 
+  /** 乐观重排：按 names 顺序调整指定看板的模块列表（拖拽后立即生效，失败时由 reload 回滚） */
+  function applyModuleOrder(board: string, names: string[]) {
+    const data = menuStatsData.value
+    const g = data?.groups.find((x) => x.id === board)
+    if (!g || !g.modules) return
+    const byName = new Map(g.modules.map((m) => [m.name, m]))
+    const next = names.map((n) => byName.get(n)).filter((m): m is MenuModuleStat => !!m)
+    // 未包含在 names 中的模块（异常情况）保持原相对顺序追加，避免丢项
+    for (const m of g.modules) {
+      if (!names.includes(m.name)) next.push(m)
+    }
+    g.modules = next
+  }
+
   return {
     navState,
     menuGroups,
@@ -70,5 +84,6 @@ export function useMenuStats() {
     pickNavModule,
     pickAll,
     fetchMenuStats,
+    applyModuleOrder,
   }
 }

@@ -105,9 +105,14 @@ export function useTaskData(params: {
   // 请求序号：只采纳最新一次请求的结果，丢弃过期响应，避免快速切换筛选/排序时旧请求覆盖新结果
   let fetchSeq = 0
   let nextCursor: string | null = null
+  // 在途请求对应的筛选签名：同签名请求已在途时跳过重复发起（如首屏 boards 回填后的双触发）
+  let inFlightSignature: string | null = null
 
   /** 重置：清空已累积列表，拉第一页 + 统计聚合 */
   async function fetchFiltered() {
+    // 同签名请求已在途（首屏 boards 回填后 watch 与 onMounted 可能各触发一次）→ 只发一个
+    if (inFlightSignature === filterSignature.value) return
+    inFlightSignature = filterSignature.value
     const seq = ++fetchSeq
     loading.value = true
     try {
@@ -128,6 +133,7 @@ export function useTaskData(params: {
     } finally {
       // 只有最新一次请求完成才结束 loading（旧请求提前返回时仍需等待新请求）
       if (seq === fetchSeq) {
+        inFlightSignature = null
         loading.value = false
         onLoaded?.()
       }

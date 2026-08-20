@@ -266,6 +266,9 @@ export const renameModule = (data: { board: string; from: string; to: string }) 
   http.put<ModuleItem>('/modules/rename', data)
 export const deleteModule = (board: string, name: string) =>
   http.delete<number>('/modules', { params: { board, name } })
+/** 模块拖拽重排：names = 该看板完整模块名新顺序（后端按序写 sort_order，未注册模块自动落库） */
+export const reorderModules = (board: string, names: string[]) =>
+  http.put('/modules/reorder', { board, names })
 
 // ---------- 操作日志（/api/op-logs） ----------
 export type OpLogAction =

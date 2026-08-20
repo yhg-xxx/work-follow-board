@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { BoardItem, TaskListItem, TaskRequest } from '../api/task'
+import type { BoardItem, TaskDetail, TaskListItem, TaskRequest } from '../api/task'
 import { createTask, getTask, listBoards, nextTaskCode as fetchNextCodeApi, suggestModules, suggestOwners, updateTask } from '../api/task'
 import { PRIORITIES, STATUSES, boardPrefix, errMsg } from '../utils/taskShared'
 import { logOp } from '../composables/useOpLog'
 
-const emit = defineEmits<{ (e: 'saved'): void }>()
+const emit = defineEmits<{ (e: 'saved', payload: { task: TaskDetail; isCreate: boolean }): void }>()
 
 // ---------- 新建/编辑 ----------
 const editorVisible = ref(false)
@@ -140,7 +140,7 @@ async function save() {
       subItems: (form.subItems ?? []).map((s) => s.trim()).filter(Boolean),
     }
     if (editingId.value) {
-      await updateTask(editingId.value, payload)
+      const updated = (await updateTask(editingId.value, payload)).data
       logOp({
         action: 'UPDATE',
         targetType: 'task',
@@ -148,6 +148,7 @@ async function save() {
         targetCode: form.taskCode ?? undefined,
         detail: `编辑事项 ${form.taskCode ?? '#' + editingId.value}《${form.title}》`,
       })
+      emit('saved', { task: updated, isCreate: false })
     } else {
       const created = (await createTask(payload)).data
       logOp({
@@ -157,10 +158,10 @@ async function save() {
         targetCode: created.taskCode ?? undefined,
         detail: `新建事项 ${created.taskCode ?? '#' + created.id}《${created.title}》`,
       })
+      emit('saved', { task: created, isCreate: true })
     }
     ElMessage.success('保存成功')
     editorVisible.value = false
-    emit('saved')
   } catch (err: any) {
     ElMessage.error('保存失败：' + errMsg(err))
   } finally {

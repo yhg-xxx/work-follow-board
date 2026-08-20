@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS t_task (
   KEY idx_task_status   (status),
   KEY idx_task_owner    (owner),
   KEY idx_task_deadline (deadline),
+  KEY idx_task_board    (board),
+  KEY idx_task_board_module (board, module),
   KEY idx_task_pinned   (pinned),
   UNIQUE KEY uk_task_code (task_code)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='事项/待办主表';

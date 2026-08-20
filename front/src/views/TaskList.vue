@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { deleteTask, pinTask } from '../api/task'
-import type { TaskListItem } from '../api/task'
+import type { TaskDetail, TaskListItem } from '../api/task'
 import type { SortField, SortOrder } from '../utils/taskShared'
 import { errMsg } from '../utils/taskShared'
 import { logOp } from '../composables/useOpLog'
@@ -42,7 +42,7 @@ async function refreshBoards() {
 // ---------- 左侧菜单数据：看板分组（来自后端聚合接口，动态） ----------
 const {
   navState, menuGroups, navAllCount, expandedMenus,
-  toggleMenuExpand, pickNavGroup, pickNavModule, pickAll, fetchMenuStats,
+  toggleMenuExpand, pickNavGroup, pickNavModule, pickAll, fetchMenuStats, applyModuleOrder,
 } = useMenuStats()
 
 // ---------- 筛选条件 + 高级筛选悬浮面板 ----------
@@ -115,20 +115,65 @@ const { exportRowsHint, exporting, exportExcel, exportCSV, exportBackupJSON } =
   useTaskExport({ selectedIds, boardMap, navAllCount, totalMatching, fetchAllMatching })
 
 // ---------- 数据/看板变更后，看板映射、菜单统计与筛选结果统一刷新 ----------
-function reload() {
+// 任务数据（列表 + 统计条带）刷新：编辑保存后按需调用
+function refreshTasks() {
+  fetchFiltered()
+}
+// 元数据（看板映射 / 侧栏菜单统计）刷新：看板/模块 CRUD 后按需调用
+function refreshMeta() {
   refreshBoards()
   fetchMenuStats()
-  fetchFiltered()
+}
+// 两者都变（新建/删除/导入/看板或模块 CRUD）
+function reload() {
+  refreshMeta()
+  refreshTasks()
+}
+
+// ---------- 编辑保存：按变更范围决定局部更新 / 重拉列表 / 全量刷新 ----------
+function onSaved({ task, isCreate }: { task: TaskDetail; isCreate: boolean }) {
+  if (isCreate) {
+    reload() // 新建：计数/顺序都可能变
+    return
+  }
+  const arr = filteredTasks.value
+  const old = arr.find((x) => x.id === task.id)
+  if (!old) {
+    reload() // 当前视图无此卡（异常兜底）
+    return
+  }
+  if (old.board !== task.board) {
+    reload() // 跨看板移动：菜单统计/看板计数也变
+    return
+  }
+  if (needRefetch(old, task)) {
+    refreshTasks() // 影响排序/筛选 → 只重拉列表+统计
+    return
+  }
+  const i = arr.findIndex((x) => x.id === task.id)
+  arr[i] = task // 纯内容编辑 → 就地替换，零请求
+}
+
+// 排序/筛选相关字段是否变化（变化才需要后端重排/重筛）
+function needRefetch(old: TaskListItem, updated: TaskListItem): boolean {
+  return old.status !== updated.status
+    || old.priority !== updated.priority
+    || old.owner !== updated.owner
+    || old.module !== updated.module
+    || old.deadline !== updated.deadline
+    || (sortState.field === 'updateDate' && old.updatedAt !== updated.updatedAt)
+    || (!!filters.keyword && old.title !== updated.title)
 }
 
 // ---------- 侧栏三点菜单操作：看板 / 工作模块管理（事件由 SidebarNav 发出） ----------
 const {
   boardIdByCode, onCreateBoard, onRenameBoard, onRecolorBoard, onDeleteBoard,
-  onCreateModule, onRenameModule, onDeleteModule,
+  onCreateModule, onRenameModule, onDeleteModule, onReorderModules,
 } = useBoardManage({
   boardMap,
   menuGroups,
   reload,
+  applyModuleOrder,
   onBoardDeleted: (code) => {
     if (navState.group === code) {
       navState.group = 'all'
@@ -143,10 +188,10 @@ const editorRef = ref<InstanceType<typeof EditorDialog> | null>(null)
 const importRef = ref<InstanceType<typeof ImportDialog> | null>(null)
 const importing = ref(false)
 
-// ---------- 置顶：点击卡片上的 ID 小标签（card-tab），成功后刷新 ----------
+// ---------- 置顶：点击卡片上的 ID 小标签（card-tab），成功后就地更新卡片（保留滚动位置，不整表重拉） ----------
 async function togglePin(t: TaskListItem) {
   try {
-    await pinTask(t.id, !t.pinned)
+    const { data: updated } = await pinTask(t.id, !t.pinned)
     logOp({
       action: 'UPDATE',
       targetType: 'task',
@@ -154,10 +199,21 @@ async function togglePin(t: TaskListItem) {
       targetCode: t.taskCode ?? undefined,
       detail: `${t.pinned ? '取消置顶' : '置顶'} ${t.taskCode ?? '#' + t.id}《${t.title}》`,
     })
-    await reload()
+    patchPinned(updated)
   } catch (err: any) {
     ElMessage.error('置顶操作失败：' + errMsg(err))
   }
+}
+
+// 置顶恒最前：移除旧卡片，用服务端返回的新卡片插入「已置顶区之后 / 未置顶区之前」
+function patchPinned(updated: TaskListItem) {
+  const arr = filteredTasks.value
+  const i = arr.findIndex((x) => x.id === updated.id)
+  if (i === -1) return
+  arr.splice(i, 1)
+  let ins = 0
+  while (ins < arr.length && arr[ins]?.pinned) ins++
+  arr.splice(ins, 0, updated)
 }
 
 // ---------- 工具栏「重置」：回到默认状态（全部看板、无任何筛选、默认排序、清关键词搜索、清勾选） ----------
@@ -215,10 +271,10 @@ watch(resetTick, () => {
   selectedIds.value.clear()
 })
 
-onMounted(() => {
-  refreshBoards()  // 看板映射（决定默认看板筛选/卡片配色/导出名称）
-  fetchMenuStats() // 侧边栏菜单计数 / 底部统计
-  fetchFiltered()  // 卡片数据：按当前筛选请求后端
+onMounted(async () => {
+  fetchMenuStats()       // 与 boards 并行，不阻塞
+  await refreshBoards()  // 先回填 filters.boards，保证首次 fetchFiltered 就带正确看板
+  fetchFiltered()        // 仅一次（watch 由 useTaskData 的 lastSignature 去重兜底）
   nextTick(setupSentinel)
 })
 onBeforeUnmount(() => {
@@ -249,6 +305,7 @@ onBeforeUnmount(() => {
       @create-module="onCreateModule"
       @rename-module="onRenameModule"
       @delete-module="onDeleteModule"
+      @reorder-modules="onReorderModules"
     />
 
     <!-- 右侧：看板主区域（统计 + 筛选 + 表格） -->
@@ -436,7 +493,7 @@ onBeforeUnmount(() => {
       </section>
 
       <!-- 新建/编辑 Dialog（台账登记卡，逻辑在子组件 EditorDialog） -->
-      <EditorDialog ref="editorRef" @saved="reload" />
+      <EditorDialog ref="editorRef" @saved="onSaved" />
       <!-- 导入预览 Dialog（逻辑在子组件 ImportDialog） -->
       <ImportDialog ref="importRef" v-model:importing="importing" :total-count="navAllCount" @done="reload" />
     </section>

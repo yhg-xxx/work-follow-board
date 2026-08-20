@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import Sortable from 'sortablejs'
 import logoIcon from '../assets/logo-icon.png'
 import type { MenuGroup, NavGroupId } from '../utils/taskShared'
 import { PRESET_COLORS } from '../utils/taskShared'
@@ -28,6 +29,7 @@ const emit = defineEmits<{
   (e: 'create-module', payload: { board: string; name: string }): void
   (e: 'rename-module', payload: { board: string; from: string; to: string }): void
   (e: 'delete-module', payload: { board: string; name: string }): void
+  (e: 'reorder-modules', payload: { board: string; names: string[] }): void
 }>()
 
 // ---------- 三点菜单浮层（fixed 定位，参照 DeepSeek 对话列表：悬停出 ⋯ → 弹菜单） ----------
@@ -237,11 +239,56 @@ function onGroupHeadClick(gid: NavGroupId) {
   emit('pick-group', gid)
   if (wasExpanded) emit('toggle-menu', gid)
 }
+
+// ---------- 模块拖拽排序（整行可拖；⋯ / 新建行 / 行内输入不参与；不加 delay——其移动即取消的特性会让快速拖拽失效，点击与拖拽靠浏览器原生拖拽阈值区分） ----------
+const rootRef = ref<HTMLElement | null>(null)
+const moduleSortables = new Map<string, Sortable>()
+/** 重建各看板模块列表的 Sortable 实例：容器随分组展开渲染 / 收起卸载，按需创建或销毁 */
+function rebuildModuleSortables() {
+  const root = rootRef.value
+  if (!root) return
+  const seen = new Set<string>()
+  for (const el of Array.from(root.querySelectorAll<HTMLElement>('.sb-sub-list[data-board]'))) {
+    const board = el.dataset.board
+    if (!board || seen.has(board)) continue
+    seen.add(board)
+    if (!moduleSortables.has(board)) {
+      moduleSortables.set(board, Sortable.create(el, {
+        animation: 150,
+        draggable: '.sb-sub-row',
+        filter: '.sb-dots, .sb-add-row, input',
+        ghostClass: 'sortable-ghost',
+        onEnd: (evt) => onModuleDragEnd(board, evt),
+      }))
+    }
+  }
+  for (const [board, s] of moduleSortables) {
+    if (!seen.has(board)) {
+      s.destroy()
+      moduleSortables.delete(board)
+    }
+  }
+}
+/** 拖拽结束：按 DOM 顺序读出该看板模块名新序列，上抛父组件乐观更新并持久化 */
+function onModuleDragEnd(board: string, evt: Sortable.SortableEvent) {
+  if (evt.oldIndex === evt.newIndex) return
+  const container = evt.to as HTMLElement
+  const names = Array.from(container.querySelectorAll<HTMLElement>('.sb-sub-row[data-name]'))
+    .map((el) => el.dataset.name ?? '')
+    .filter(Boolean)
+  if (names.length) emit('reorder-modules', { board, names })
+}
+// 模块列表 / 展开状态变化（含 menu-stats 重拉）后重建实例；deep 覆盖 expandedMenus 集合内部增删
+watch([() => props.menuGroups, () => props.expandedMenus], () => nextTick(rebuildModuleSortables), { deep: true })
+onBeforeUnmount(() => {
+  for (const s of moduleSortables.values()) s.destroy()
+  moduleSortables.clear()
+})
 </script>
 
 <template>
   <!-- 左侧：主导航菜单栏（三个一级分组 + 二级模块） -->
-  <aside class="sidebar" :class="{ collapsed }" aria-label="主导航">
+  <aside ref="rootRef" class="sidebar" :class="{ collapsed }" aria-label="主导航">
     <!-- 侧栏顶部：品牌标识 + 收起 / 打开按钮 -->
     <div class="sb-rail">
       <span class="sb-brand" title="看板导航">
@@ -341,12 +388,13 @@ function onGroupHeadClick(gid: NavGroupId) {
             @click.stop="openBoardMenu($event, g)"
           >⋯</button>
         </div>
-        <!-- 二级菜单：工作模块（点击展开/收起） -->
-        <div v-if="expandedMenus.has(g.id) && (g.modules.length || isAddingModule(g.id))" class="sb-sub-list">
+        <!-- 二级菜单：工作模块（点击展开/收起；整行可拖拽排序） -->
+        <div v-if="expandedMenus.has(g.id) && (g.modules.length || isAddingModule(g.id))" class="sb-sub-list" :data-board="g.id">
           <div
             v-for="m in g.modules"
             :key="g.id + ':' + m.name"
             class="sb-sub-row"
+            :data-name="m.name"
           >
             <button
               type="button"
@@ -832,6 +880,19 @@ function onGroupHeadClick(gid: NavGroupId) {
   align-items: center;
   border-radius: 7px;
 }
+/* 拖拽排序：整行 grab 光标，拖起后 grabbing + 半透明占位 */
+.sb-sub-row,
+.sb-sub-item {
+  cursor: grab;
+  user-select: none;
+}
+.sb-sub-row.sortable-ghost {
+  opacity: 0.45;
+}
+.sb-sub-row.sortable-chosen,
+.sb-sub-row.sortable-chosen .sb-sub-item {
+  cursor: grabbing;
+}
 .sb-sub-item {
   flex: 1 1 auto;
   min-width: 0;
@@ -846,7 +907,6 @@ function onGroupHeadClick(gid: NavGroupId) {
   color: var(--c-sidebar-muted);
   font: inherit;
   font-size: 13px;
-  cursor: pointer;
   text-align: left;
   transition: background 0.15s, color 0.15s;
 }
