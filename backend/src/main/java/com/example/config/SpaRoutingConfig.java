@@ -42,9 +42,10 @@ public class SpaRoutingConfig {
                     uri = uri.substring(contextPath.length());
                 }
 
-                // 1) 后端 API / 企微回调，直接放行
+                // 1) 后端 API / 企微回调 / MCP(SSE) 端点，直接放行
                 if (uri.startsWith("/api/") || "/api".equals(uri)
-                        || uri.startsWith("/wecom/") || "/wecom".equals(uri)) {
+                        || uri.startsWith("/wecom/") || "/wecom".equals(uri)
+                        || uri.startsWith("/mcp/") || "/mcp".equals(uri)) {
                     chain.doFilter(req, res);
                     return;
                 }
