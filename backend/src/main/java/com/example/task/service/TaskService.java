@@ -69,10 +69,11 @@ public class TaskService {
 
     @Transactional(readOnly = true)
     public TaskDtos.TaskPage list(List<String> boards, List<String> statuses, List<String> modules,
-                                  List<String> owners, String keyword, String deadlineFrom, String deadlineTo,
+                                  List<String> owners, boolean ownerFuzzy, String keyword, String deadlineFrom, String deadlineTo,
                                   String sortMode, String cursor, Integer limit, boolean all) {
         String mode = normalize(sortMode);
-        if (!Set.of("asc", "desc", "manual", "priority", "updateDate").contains(mode)) {
+        // mode 为 null 时 Set.of(...).contains(null) 会抛 NPE（Java 不可变集合禁止 null 查询）
+        if (mode == null || !Set.of("asc", "desc", "manual", "priority", "updateDate").contains(mode)) {
             mode = "asc";
         }
         int size = all ? Integer.MAX_VALUE : (limit == null ? 50 : Math.min(Math.max(limit, 1), 200));
@@ -81,7 +82,7 @@ public class TaskService {
         List<Task> tasks = taskRepository.searchPage(
                 mode,
                 normalizeList(boards), normalizeList(statuses), normalizeList(modules), normalizeList(owners),
-                normalize(keyword), parseDate(deadlineFrom), parseDate(deadlineTo),
+                ownerFuzzy, normalize(keyword), parseDate(deadlineFrom), parseDate(deadlineTo),
                 decodeCursor(cursor, mode), fetch);
         boolean hasMore = !all && tasks.size() > size;
         if (hasMore) {
@@ -110,11 +111,11 @@ public class TaskService {
     /** 统计条带聚合（当前筛选范围）。 */
     @Transactional(readOnly = true)
     public TaskDtos.TaskStats stats(List<String> boards, List<String> statuses, List<String> modules,
-                                    List<String> owners, String keyword, String deadlineFrom, String deadlineTo) {
+                                    List<String> owners, boolean ownerFuzzy, String keyword, String deadlineFrom, String deadlineTo) {
         LocalDate today = LocalDate.now();
         Object[] row = taskRepository.countStats(
                 normalizeList(boards), normalizeList(statuses), normalizeList(modules), normalizeList(owners),
-                normalize(keyword), parseDate(deadlineFrom), parseDate(deadlineTo),
+                ownerFuzzy, normalize(keyword), parseDate(deadlineFrom), parseDate(deadlineTo),
                 today, today.plusDays(7));
         return new TaskDtos.TaskStats(
                 num(row[0]), num(row[1]), num(row[2]), num(row[3]), num(row[4]));

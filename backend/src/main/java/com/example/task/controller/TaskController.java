@@ -44,7 +44,8 @@ public class TaskController {
                                   @RequestParam(required = false) String cursor,
                                   @RequestParam(required = false) Integer limit,
                                   @RequestParam(required = false, defaultValue = "false") boolean all) {
-        return taskService.list(boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo,
+        // REST owner 保持精确 IN（模糊仅 MCP 侧使用）
+        return taskService.list(boards, statuses, modules, owners, false, keyword, deadlineFrom, deadlineTo,
                 sortOrder, cursor, limit, all);
     }
 
@@ -57,7 +58,7 @@ public class TaskController {
                                     @RequestParam(required = false) String keyword,
                                     @RequestParam(required = false) String deadlineFrom,
                                     @RequestParam(required = false) String deadlineTo) {
-        return taskService.stats(boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo);
+        return taskService.stats(boards, statuses, modules, owners, false, keyword, deadlineFrom, deadlineTo);
     }
 
     @GetMapping("/tasks/menu-stats")

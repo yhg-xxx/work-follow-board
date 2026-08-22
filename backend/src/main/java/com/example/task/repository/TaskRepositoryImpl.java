@@ -113,16 +113,20 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
         ql.append("))");
     }
 
-    /** 收集公共筛选条件（全部可选，null/空集合表示不限制）。 */
+    /** 收集公共筛选条件（全部可选，null/空集合表示不限制）。ownerFuzzy=true 时负责人按 LIKE 模糊。 */
     private List<String> filterConds(List<Object> params,
                                      List<String> boards, List<String> statuses, List<String> modules,
-                                     List<String> owners, String keyword,
+                                     List<String> owners, boolean ownerFuzzy, String keyword,
                                      LocalDate deadlineFrom, LocalDate deadlineTo) {
         List<String> conds = new ArrayList<>();
         addIn(conds, params, "t.board", boards);
         addIn(conds, params, "t.status", statuses);
         addIn(conds, params, "t.module", modules);
-        addIn(conds, params, "t.owner", owners);
+        if (ownerFuzzy) {
+            addLikeList(conds, params, "t.owner", owners);
+        } else {
+            addIn(conds, params, "t.owner", owners);
+        }
         String kw = keyword == null ? null : keyword.trim();
         if (kw != null && !kw.isEmpty()) {
             // 全文搜索：按空白拆词，每个词须命中任一可搜字段（AND 语义，各词可落在不同字段）
@@ -165,6 +169,25 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
         }
     }
 
+    /** 多值模糊匹配：每个值各自 LIKE %词%（多值 OR），`\\ % _` 按字面转义。 */
+    private void addLikeList(List<String> conds, List<Object> params, String col, List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+        List<String> parts = new ArrayList<>();
+        for (String v : values) {
+            if (v == null || v.isBlank()) {
+                continue;
+            }
+            int p = params.size() + 1;
+            parts.add(col + " like ?" + p);
+            params.add("%" + escapeLike(v.trim()) + "%");
+        }
+        if (!parts.isEmpty()) {
+            conds.add("(" + String.join(" or ", parts) + ")");
+        }
+    }
+
     private void addSingle(List<String> conds, List<Object> params, String prefix, Object value) {
         int p = params.size() + 1;
         conds.add(prefix + p);
@@ -180,12 +203,12 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
     @Override
     public List<Task> searchPage(String sortMode,
                                  List<String> boards, List<String> statuses, List<String> modules,
-                                 List<String> owners, String keyword,
+                                 List<String> owners, boolean ownerFuzzy, String keyword,
                                  LocalDate deadlineFrom, LocalDate deadlineTo,
                                  SearchCursor cursor, int limit) {
         List<Object> params = new ArrayList<>();
         StringBuilder ql = new StringBuilder("select t from Task t");
-        List<String> conds = filterConds(params, boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo);
+        List<String> conds = filterConds(params, boards, statuses, modules, owners, ownerFuzzy, keyword, deadlineFrom, deadlineTo);
         if (!conds.isEmpty()) {
             ql.append(" where ").append(String.join(" and ", conds));
         }
@@ -202,11 +225,11 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
 
     @Override
     public long countTotal(List<String> boards, List<String> statuses, List<String> modules,
-                           List<String> owners, String keyword,
+                           List<String> owners, boolean ownerFuzzy, String keyword,
                            LocalDate deadlineFrom, LocalDate deadlineTo) {
         List<Object> params = new ArrayList<>();
         StringBuilder ql = new StringBuilder("select count(t) from Task t");
-        List<String> conds = filterConds(params, boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo);
+        List<String> conds = filterConds(params, boards, statuses, modules, owners, ownerFuzzy, keyword, deadlineFrom, deadlineTo);
         if (!conds.isEmpty()) {
             ql.append(" where ").append(String.join(" and ", conds));
         }
@@ -217,11 +240,11 @@ public class TaskRepositoryImpl implements TaskSearchRepository {
 
     @Override
     public Object[] countStats(List<String> boards, List<String> statuses, List<String> modules,
-                               List<String> owners, String keyword,
+                               List<String> owners, boolean ownerFuzzy, String keyword,
                                LocalDate deadlineFrom, LocalDate deadlineTo,
                                LocalDate today, LocalDate todayPlus7) {
         List<Object> params = new ArrayList<>();
-        List<String> conds = filterConds(params, boards, statuses, modules, owners, keyword, deadlineFrom, deadlineTo);
+        List<String> conds = filterConds(params, boards, statuses, modules, owners, ownerFuzzy, keyword, deadlineFrom, deadlineTo);
         // 统计段的 near 区间参数编号在 filter 参数之后
         int t1 = params.size() + 1;
         int t2 = params.size() + 2;

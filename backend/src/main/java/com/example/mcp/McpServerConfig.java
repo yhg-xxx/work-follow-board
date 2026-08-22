@@ -69,12 +69,17 @@ public class McpServerConfig {
     @Bean(destroyMethod = "closeGracefully")
     @SuppressWarnings("deprecation")
     public McpSyncServer mcpSyncServer(HttpServletSseServerTransportProvider provider,
-                                       TaskReadMcpTools readTools) {
+                                       TaskReadMcpTools readTools,
+                                       TaskWriteMcpTools writeTools) {
         McpSyncServer server = McpServer.sync(provider)
                 .serverInfo("work-follow-board", "1.0.0")
                 .capabilities(McpSchema.ServerCapabilities.builder().tools(true).build())
+                // 关闭 SDK 对工具入参的强校验（v2.0.1 ToolInputValidator 对多属性可选 schema 有
+                // 「message must not be null」缺陷），参数合法性统一由工具 handler 兜底校验并返回中文错误
+                .validateToolInputs(false)
                 .build();
         readTools.registerAll(server);
+        writeTools.registerAll(server);
         return server;
     }
 }

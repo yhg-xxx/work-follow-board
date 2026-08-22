@@ -22,16 +22,17 @@ public interface TaskSearchRepository {
      * 分页查询一页（多取一条用于判断 hasMore）。
      * sortMode: asc / desc / manual / priority / updateDate（默认 asc）。
      * cursor 为 null 表示首页；limit 为单页条数（all 模式下传极大值即可）。
+     * ownerFuzzy 为 true 时 owners 按 LIKE %词% 模糊匹配（多值 OR），否则精确 IN。
      */
     List<Task> searchPage(String sortMode,
                           List<String> boards, List<String> statuses, List<String> modules,
-                          List<String> owners, String keyword,
+                          List<String> owners, boolean ownerFuzzy, String keyword,
                           LocalDate deadlineFrom, LocalDate deadlineTo,
                           SearchCursor cursor, int limit);
 
     /** 当前筛选范围的条数（统计条带 total / 全选判定）。 */
     long countTotal(List<String> boards, List<String> statuses, List<String> modules,
-                    List<String> owners, String keyword,
+                    List<String> owners, boolean ownerFuzzy, String keyword,
                     LocalDate deadlineFrom, LocalDate deadlineTo);
 
     /**
@@ -39,7 +40,7 @@ public interface TaskSearchRepository {
      * near = 截止日期在 [today, todayPlus7] 闭区间内的条数。
      */
     Object[] countStats(List<String> boards, List<String> statuses, List<String> modules,
-                        List<String> owners, String keyword,
+                        List<String> owners, boolean ownerFuzzy, String keyword,
                         LocalDate deadlineFrom, LocalDate deadlineTo,
                         LocalDate today, LocalDate todayPlus7);
 }
